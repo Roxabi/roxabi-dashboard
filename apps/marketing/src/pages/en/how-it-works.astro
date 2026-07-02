@@ -1,0 +1,227 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { en } from "../../i18n/index";
+import SiteHeader from "../../components/SiteHeader.astro";
+import SiteFooter from "../../components/SiteFooter.astro";
+import AgentIcon from "../../components/AgentIcon.astro";
+
+const t = en;
+---
+
+<Layout
+  lang="en"
+  title="Roxabi Live · How it works"
+  description="Install roxabi-issues on Claude Code, Grok, or Codex, then let your agent structure GitHub epics and dependencies to feed the Roxabi Live graph."
+>
+  <SiteHeader t={t} />
+  <main class="setup-doc doc-page">
+    <div class="container">
+      <p class="setup-kicker">15-minute setup</p>
+      <h1>Your agent structures GitHub, the graph runs the fleet</h1>
+      <p class="setup-lead">
+        You describe a feature in plain language. Your agent (Claude Code, Grok, or Codex)
+        proposes an epic, breaks down sub-tasks, sets <code>blocked-by</code> links and
+        parent/child relations. Roxabi Live reads all of it and computes
+        <strong>ready</strong>, <strong>blocked</strong>, and <strong>done</strong>.
+      </p>
+
+      <section>
+        <h2><span class="step-badge">1</span> Pick your agent and install the kit</h2>
+        <p>
+          The <code>roxabi-issues</code> plugin bundles the <code>issue-triage</code> skill.
+          Once installed, the agent activates it on its own when you talk about features, epics,
+          or issue dependencies.
+        </p>
+
+        <div class="agent-tabs">
+          <input type="radio" name="agent" id="agent-claude" checked />
+          <input type="radio" name="agent" id="agent-grok" />
+          <input type="radio" name="agent" id="agent-codex" />
+
+          <div class="agent-tab-labels">
+            <label for="agent-claude"><AgentIcon agent="claude" /> Claude Code</label>
+            <label for="agent-grok"><AgentIcon agent="grok" /> Grok</label>
+            <label for="agent-codex"><AgentIcon agent="codex" /> Codex</label>
+          </div>
+
+          <div class="agent-panels">
+            <div class="agent-panel panel-claude">
+              <div class="agent-panel-card">
+                <p>From a terminal, in any repo:</p>
+                <pre class="setup-snippet">claude plugin marketplace add Roxabi/roxabi-live
+claude plugin install roxabi-issues</pre>
+                <p>
+                  The <code>roxabi-live-marketplace</code> catalog references the plugin
+                  and skill. You can invoke <code>/issue-triage</code> explicitly,
+                  but in practice the agent triggers it when context calls for it.
+                </p>
+              </div>
+            </div>
+
+            <div class="agent-panel panel-grok">
+              <div class="agent-panel-card">
+                <p>
+                  Grok is <strong>Claude Code compatible with zero extra config</strong>:
+                  it automatically reads Claude marketplaces, plugins, and skills
+                  (<a href="https://docs.x.ai/build/features/skills-plugins-marketplaces">xAI docs</a>).
+                </p>
+                <p>Two equivalent paths:</p>
+                <ol>
+                  <li>Install via Claude Code (commands above), then launch Grok in the same repo.</li>
+                  <li>Or open the Grok TUI Marketplace tab (<code>/plugins</code>) and install <code>roxabi-issues</code> from <code>Roxabi/roxabi-live</code>.</li>
+                </ol>
+                <p class="agent-note">
+                  The skill appears as a slash command. Natural triggers: "create an epic",
+                  "block this issue", "break this into sub-tasks".
+                </p>
+              </div>
+            </div>
+
+            <div class="agent-panel panel-codex">
+              <div class="agent-panel-card">
+                <p>In the Codex CLI or Codex app:</p>
+                <pre class="setup-snippet">codex plugin marketplace add Roxabi/roxabi-live
+codex plugin install roxabi-issues</pre>
+                <p>
+                  You can also browse <strong>Plugins</strong> in the Codex app
+                  or run <code>/plugins</code> in the CLI, then install from the marketplace
+                  (<a href="https://developers.openai.com/codex/plugins">OpenAI docs</a>).
+                </p>
+                <p class="agent-note">
+                  Codex loads the skill implicitly when your request matches its description,
+                  or explicitly via <code>@issue-triage</code>.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="step-badge">2</span> You describe the feature, the agent structures GitHub</h2>
+        <p>
+          No commands to memorize. Describe the intent; the agent proposes a plan,
+          you approve, it runs the skill in the background.
+        </p>
+
+        <div class="conv-demo">
+          <div class="conv-thread">
+            <div class="conv-bubble user">
+              <div class="conv-who">You</div>
+              I want a feature with a user registration form.
+            </div>
+
+            <div class="conv-bubble agent">
+              <div class="conv-who">Agent (Claude · Grok · Codex)</div>
+              I suggest structuring this as an epic with 4 sequential sub-tasks.
+              Frontend and API work only start once prerequisites are done.
+              <ul class="conv-plan">
+                <li>
+                  <strong>#421 · DB schema + migration</strong>
+                  <span class="plan-meta"> · size S · ready on creation</span>
+                </li>
+                <li>
+                  <strong>#422 · POST /signup API</strong>
+                  <span class="plan-meta"> · blocked-by #421</span>
+                </li>
+                <li>
+                  <strong>#423 · Registration form + validation</strong>
+                  <span class="plan-meta"> · blocked-by #422</span>
+                </li>
+                <li>
+                  <strong>#424 · E2E signup tests</strong>
+                  <span class="plan-meta"> · blocked-by #423</span>
+                </li>
+              </ul>
+              Should I create the epic and these issues on GitHub?
+            </div>
+
+            <div class="conv-bubble user">
+              <div class="conv-who">You</div>
+              Yes, go ahead.
+            </div>
+
+            <div class="conv-bubble agent">
+              <div class="conv-who">Agent</div>
+              Done. Epic <strong>#420</strong> created, 4 children attached,
+              <code>blocked-by</code> dependencies set. Only #421 is <em>ready</em> for now.
+            </div>
+          </div>
+
+          <details class="conv-behind">
+            <summary>What the agent runs in the background (you don't have to)</summary>
+            <ul>
+              <li>Activates the <code>issue-triage</code> skill installed from the marketplace</li>
+              <li>Creates the epic with <code>epic</code> type, size, and priority</li>
+              <li>Creates each sub-issue as a child of the epic (native GitHub parent/child)</li>
+              <li>Sets <code>blocked-by</code> links to sequence the work</li>
+              <li>Applies size, priority, and lane labels for the cockpit</li>
+            </ul>
+          </details>
+        </div>
+
+        <div class="epic-tree" aria-hidden="true">
+          <div class="tree-epic">#420 Epic · User registration</div>
+          <div>├─ <span class="tree-ready">#421 DB schema + migration</span> <span class="tree-meta">ready</span></div>
+          <div>├─ <span class="tree-blocked">#422 POST /signup API</span> <span class="tree-meta">blocked-by #421</span></div>
+          <div>├─ <span class="tree-blocked">#423 Registration form</span> <span class="tree-meta">blocked-by #422</span></div>
+          <div>└─ <span class="tree-blocked">#424 E2E tests</span> <span class="tree-meta">blocked-by #423</span></div>
+        </div>
+
+        <div class="setup-callout">
+          <strong>Remember:</strong> you steer intent ("I want this feature").
+          The agent handles GitHub mechanics (epic, children, blocked-by, labels).
+          The Roxabi Live graph updates and shows what else you can launch in parallel.
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="step-badge">3</span> What the graph understands</h2>
+        <p>Two native GitHub relation types are enough. No external board, no Projects V2.</p>
+        <h3><code>blocked-by</code>: who waits for what</h3>
+        <p>
+          While a blocker is open, the issue stays <em>blocked</em>. When the blocker closes,
+          it becomes <em>ready</em>. That's how you avoid launching agents on incompatible tasks.
+        </p>
+        <h3>Parent / child: epics</h3>
+        <p>
+          The epic groups sub-tasks. The cockpit filters by parent and shows hierarchy
+          in the graph, like the registration example above.
+        </p>
+        <h3>Labels: size, priority, lane</h3>
+        <p>
+          The agent sets them via the skill. You use them in cockpit filters
+          (<code>size:M</code>, <code>P1-high</code>, <code>graph:lane/b</code>, etc.).
+        </p>
+      </section>
+
+      <section>
+        <h2><span class="step-badge">4</span> Connect the Roxabi Live cockpit</h2>
+        <ol>
+          <li>Sign in at <a href="https://app.live.roxabi.dev/" data-app-link data-app-path="/">app.live.roxabi.dev</a></li>
+          <li>Install the GitHub App on your organization</li>
+          <li>Webhooks + reconciliation keep the graph in sync in real time</li>
+        </ol>
+        <p>
+          Open the graph view: issues that are <em>ready</em> with no open blockers
+          are the ones you can hand to an agent right away.
+        </p>
+      </section>
+
+      <section>
+        <h2>Resources</h2>
+        <ul class="setup-links">
+          <li><a href="https://github.com/Roxabi/roxabi-live/blob/main/plugins/roxabi-issues/skills/issue-triage/SKILL.md">Full skill reference</a> (power users)</li>
+          <li><a href="/en/for-agents">Agent & LLM guide</a></li>
+          <li><a href="/llms.txt"><code>llms.txt</code></a></li>
+        </ul>
+      </section>
+
+      <p class="setup-cta">
+        <a class="btn btn-primary" href="https://app.live.roxabi.dev/" data-app-link data-app-path="/">Open cockpit</a>
+        <a class="btn btn-ghost" href="/comment-ca-marche">Version française</a>
+      </p>
+    </div>
+  </main>
+  <SiteFooter t={t} />
+</Layout>

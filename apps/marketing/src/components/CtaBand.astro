@@ -23,7 +23,7 @@ const { t } = Astro.props;
             <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </a>
-        <a href="https://github.com/apps/roxabi-live" class="btn btn-ghost" target="_blank" rel="noopener noreferrer">
+        <a href={t.header.navSetupHref} class="btn btn-ghost">
           {t.cta.ctaGhost}
         </a>
       </div>

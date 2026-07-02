@@ -2,15 +2,14 @@ import type { Translations } from "./fr";
 
 export const en: Translations = {
   // ── Meta ──────────────────────────────────────────────────────────────────
-  siteTitle: "Roxabi Live — Command center for your agent fleet",
+  siteTitle: "Roxabi Live · Command center for your agent fleet",
   siteDescription:
     "Launch ten agents at once without collisions. Roxabi Live reads your GitHub issues and their blocked-by links to reveal what you can run in parallel.",
 
   // ── Header ────────────────────────────────────────────────────────────────
   header: {
-    navComment:   "Feedback",
-    navAdmin:     "Admin",
-    navCommentHref: "https://github.com/Roxabi/roxabi-live/issues/new/choose",
+    navSetup:     "How it works",
+    navSetupHref: "/en/how-it-works",
     loginLabel:   "Sign in",
   },
 
@@ -20,11 +19,11 @@ export const en: Translations = {
     eyebrowRight: "GitHub native",
     h1Part1:      "Launch ten agents at once.",
     h1Accent:     "Without collisions.",
-    lead:         "The bottleneck for an agent fleet is no longer writing code — it's concurrency. Roxabi Live reads your GitHub issues and their blocked-by links to reveal, at a glance, what you can run in parallel.",
+    lead:         "The bottleneck for an agent fleet is no longer writing code, it's concurrency. Roxabi Live reads your GitHub issues and their blocked-by links to reveal, at a glance, what you can run in parallel.",
     ctaPrimary:   "Sign in",
-    ctaGhost:     "View demo",
+    ctaGhost:     "How it works",
     note:         "Native GitHub Issues · no third-party tools · zero adoption friction",
-    boardTitle:   "roxabi-live · dashboard",
+    boardTitle:   "roxabi-live · dependency graph",
     boardLive:    "live",
     legendReady:   "ready",
     legendRunning: "running",
@@ -62,7 +61,7 @@ export const en: Translations = {
   method: {
     kicker: "The method",
     h2:     "GitHub Issues as the nervous system of your fleet.",
-    lead:   "No extra tooling. Roxabi Live builds on what you already do — issues, labels, dependencies — to compute in real time what can move forward.",
+    lead:   "No extra tooling. Roxabi Live builds on what you already do (issues, labels, dependencies) to compute in real time what can move forward.",
     steps: [
       {
         num:   "Step 01",
@@ -91,7 +90,7 @@ export const en: Translations = {
   // ── Paradigm ──────────────────────────────────────────────────────────────
   paradigm: {
     kicker:    "The paradigm shift",
-    headline:  "You no longer orchestrate — the graph does.",
+    headline:  "You no longer orchestrate, the graph does.",
     body:      "Until now, coordinating agents required constant manual attention: who can start? who is waiting for what? Roxabi Live automates this decision from your issues and their native GitHub dependencies.",
     oldLabel:  "Before",
     oldText:   "Manual coordination, spreadsheets, Slack, permanent risk of oversight",
@@ -105,7 +104,7 @@ export const en: Translations = {
   github: {
     kicker: "GitHub native, zero friction",
     h2:     "Your source of truth stays GitHub.",
-    p1:     "Roxabi Live doesn't replace your workflow — it augments it. Issues, labels, sub-issues, blocked-by: everything stays in GitHub, where your agents already read and write.",
+    p1:     "Roxabi Live doesn't replace your workflow, it augments it. Issues, labels, sub-issues, blocked-by: everything stays in GitHub, where your agents already read and write.",
     p2:     "No migration. No double entry. No third-party tool to learn.",
     trust: [
       {
@@ -156,7 +155,7 @@ export const en: Translations = {
     h2Accent:    "without collisions?",
     body:        "Join the teams orchestrating their Claude agents with GitHub dependency graphs, in real time.",
     ctaPrimary:  "Sign in",
-    ctaGhost:    "View demo",
+    ctaGhost:    "How it works",
     reassurance: "Native GitHub Issues · no card required · zero adoption friction",
   },
 
@@ -164,11 +163,10 @@ export const en: Translations = {
   footer: {
     logoWordmark: "Live",
     links: [
-      { label: "Agent guide", href: "/en/for-agents" },
-      { label: "llms.txt",    href: "/llms.txt" },
-      { label: "Feedback",    href: "https://github.com/Roxabi/roxabi-live/issues/new/choose" },
-      { label: "Admin",       href: "https://app.live.roxabi.dev/admin", appPath: "/admin" },
-      { label: "GitHub",      href: "https://github.com/Roxabi/roxabi-live" },
+      { label: "How it works", href: "/en/how-it-works" },
+      { label: "Agent guide",  href: "/en/for-agents" },
+      { label: "llms.txt",     href: "/llms.txt" },
+      { label: "GitHub",       href: "https://github.com/Roxabi/roxabi-live" },
     ],
     copy: "© 2026 Roxabi",
   },
