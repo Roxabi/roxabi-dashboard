@@ -6,7 +6,7 @@ install:             ## install repo tooling (license check, pre-commit) + git h
 	uv sync --group dev
 	@# Git hooks — NOT `pre-commit install`: it refuses whenever core.hooksPath
 	@# is set at any scope (e.g. machines with global ccc reindex hooks).
-	@bash tools/install-hooks.sh || echo "make install: git hooks NOT installed (pre-commit missing?) — run 'uv tool install pre-commit' then 'bash tools/install-hooks.sh'"
+	@bash tools/install-hooks.sh || echo "make install: git hooks NOT installed (pre-commit missing?) — run 'uv tool install pre-commit' then 'bash tools/install-hooks.sh'" >&2
 
 lint:                ## run ruff on tools/
 	uv run ruff check tools
