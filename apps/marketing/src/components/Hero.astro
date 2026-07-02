@@ -24,7 +24,7 @@ const { t } = Astro.props;
         <p class="hero-lead">{t.hero.lead}</p>
         <div class="hero-ctas">
           <a href="https://app.live.roxabi.dev/" data-app-link data-app-path="/" class="btn btn-primary">{t.hero.ctaPrimary}</a>
-          <a href="#demo" class="btn btn-ghost">{t.hero.ctaGhost}</a>
+          <a href={t.header.navSetupHref} class="btn btn-ghost">{t.hero.ctaGhost}</a>
         </div>
         <p class="hero-note">{t.hero.note}</p>
       </div>

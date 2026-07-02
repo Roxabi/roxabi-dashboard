@@ -6,6 +6,8 @@
 
 - Cockpit (sign in): https://app.live.roxabi.dev
 - Marketing: https://live.roxabi.dev
+- Setup guide (FR): https://live.roxabi.dev/comment-ca-marche
+- Setup guide (EN): https://live.roxabi.dev/en/how-it-works
 - Agent guide (FR): https://live.roxabi.dev/for-agents
 - Agent guide (EN): https://live.roxabi.dev/en/for-agents
 - API (server-to-server; browser uses app proxy): https://api.live.roxabi.dev
@@ -45,17 +47,17 @@ Invoke: `/issue-triage`
 
 ## Monorepo layout
 
-- `apps/api` — Hono Worker, sync, webhooks, D1
-- `apps/app` — React SPA, proxies API via service binding
-- `apps/marketing` — Astro landing (apex domain)
-- `plugins/roxabi-issues` — issue-triage skill (bun)
-- `packages/shared` — shared TypeScript types
+- `apps/api`: Hono Worker, sync, webhooks, D1
+- `apps/app`: React SPA, proxies API via service binding
+- `apps/marketing`: Astro landing (apex domain)
+- `plugins/roxabi-issues`: issue-triage skill (bun)
+- `packages/shared`: shared TypeScript types
 
 ## API (session auth via app)
 
-- `GET /api/graph` — dependency graph JSON
-- `GET /api/issues` — filtered issue list
-- `GET /api/issues/{owner}/{repo}%23{N}` — single issue (URL-encoded `#`)
+- `GET /api/graph`: dependency graph JSON
+- `GET /api/issues`: filtered issue list
+- `GET /api/issues/{owner}/{repo}%23{N}`: single issue (URL-encoded `#`)
 
 ## Optional
 

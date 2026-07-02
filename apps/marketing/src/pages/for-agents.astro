@@ -9,11 +9,11 @@ const t = fr;
 
 <Layout
   lang="fr"
-  title="Roxabi Live — Guide agents & LLM"
+  title="Roxabi Live · Guide agents & LLM"
   description="Comment structurer vos issues GitHub avec /issue-triage et piloter une flotte d'agents via le cockpit Roxabi Live."
 >
   <SiteHeader t={t} />
-  <main class="agents-doc">
+  <main class="agents-doc doc-page">
     <div class="container">
       <p class="agents-kicker">Pour agents & LLM</p>
       <h1>GitHub + <code>/issue-triage</code> + cockpit</h1>
@@ -26,9 +26,9 @@ const t = fr;
       <section>
         <h2>La boucle</h2>
         <ol>
-          <li><strong>Triage</strong> — <code>/issue-triage</code> : labels taille, priorité, lane, type + dépendances.</li>
-          <li><strong>Sync</strong> — webhooks + réconciliation → graphe à jour dans le cockpit.</li>
-          <li><strong>Lancement</strong> — ne démarrer que les issues <em>ready</em> (aucun bloqueur ouvert).</li>
+          <li><strong>Triage</strong> : <code>/issue-triage</code> pour les labels taille, priorité, lane, type et les dépendances.</li>
+          <li><strong>Sync</strong> : webhooks + réconciliation, graphe à jour dans le cockpit.</li>
+          <li><strong>Lancement</strong> : ne démarrer que les issues <em>ready</em> (aucun bloqueur ouvert).</li>
         </ol>
       </section>
 
@@ -36,17 +36,18 @@ const t = fr;
         <h2>Installer le skill</h2>
         <pre><code>claude plugin marketplace add Roxabi/roxabi-live
 claude plugin install roxabi-issues</code></pre>
-        <p>Invocation : <code>/issue-triage</code> — référence complète sur <a href="https://github.com/Roxabi/roxabi-live/blob/main/plugins/roxabi-issues/skills/issue-triage/SKILL.md">GitHub</a>.</p>
+        <p>Invocation : <code>/issue-triage</code>. Référence complète sur <a href="https://github.com/Roxabi/roxabi-live/blob/main/plugins/roxabi-issues/skills/issue-triage/SKILL.md">GitHub</a>.</p>
+        <p>Voir aussi le <a href="/comment-ca-marche">guide setup complet</a>.</p>
       </section>
 
       <section>
         <h2>Vocabulaire des labels (sync cockpit)</h2>
         <ul>
-          <li><strong>Lane</strong> — <code>graph:lane/b</code>, <code>graph:lane/a1</code>, …</li>
-          <li><strong>Taille</strong> — <code>size:M</code> ou <code>XS|S|M|L|XL</code> ; tiers canoniques <code>S</code>, <code>F-lite</code>, <code>F-full</code></li>
-          <li><strong>Priorité</strong> — <code>P0-critical</code>, <code>P1-high</code>, <code>P2-medium</code>, <code>P3-low</code> (canonique issue-triage)</li>
+          <li><strong>Lane</strong> : <code>graph:lane/b</code>, <code>graph:lane/a1</code>, …</li>
+          <li><strong>Taille</strong> : <code>size:M</code> ou <code>XS|S|M|L|XL</code> ; tiers canoniques <code>S</code>, <code>F-lite</code>, <code>F-full</code></li>
+          <li><strong>Priorité</strong> : <code>P0-critical</code>, <code>P1-high</code>, <code>P2-medium</code>, <code>P3-low</code> (canonique issue-triage)</li>
         </ul>
-        <p>Pas de GitHub Projects V2 requis — labels + relations natives suffisent.</p>
+        <p>Pas de GitHub Projects V2 requis. Labels + relations natives suffisent.</p>
       </section>
 
       <section>
@@ -62,8 +63,8 @@ claude plugin install roxabi-issues</code></pre>
       <section>
         <h2>Ressources machine</h2>
         <ul class="agents-links">
-          <li><a href="/llms.txt"><code>llms.txt</code></a> — index compact pour crawlers LLM</li>
-          <li><a href="https://github.com/Roxabi/roxabi-live/blob/main/docs/agent-workflow.md">agent-workflow.md</a> — guide détaillé (EN)</li>
+          <li><a href="/llms.txt"><code>llms.txt</code></a> : index compact pour crawlers LLM</li>
+          <li><a href="https://github.com/Roxabi/roxabi-live/blob/main/docs/agent-workflow.md">agent-workflow.md</a> : guide détaillé (EN)</li>
           <li><a href="https://github.com/Roxabi/roxabi-live/blob/main/docs/ARCHITECTURE.md">ARCHITECTURE.md</a></li>
         </ul>
       </section>
@@ -78,9 +79,6 @@ claude plugin install roxabi-issues</code></pre>
 </Layout>
 
 <style>
-  .agents-doc {
-    padding: 48px 0 96px;
-  }
   .agents-kicker {
     font-size: 12px;
     font-weight: 600;
