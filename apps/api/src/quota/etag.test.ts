@@ -15,8 +15,9 @@ describe("etag helpers", () => {
     expect(etagMatches('"nope"', etag)).toBe(false);
   });
 
-  it("sealVersionForKeys encodes sealed set", () => {
-    expect(sealVersionForKeys(new Set())).toBe("0");
-    expect(sealVersionForKeys(new Set(["a", "b"]))).toContain("2:");
+  it("sealVersionForKeys encodes sealed set", async () => {
+    await expect(sealVersionForKeys(new Set())).resolves.toBe("0");
+    const sealed = await sealVersionForKeys(new Set(["a", "b"]));
+    expect(sealed).toMatch(/^"[0-9a-f]{64}"$/);
   });
 });

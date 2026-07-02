@@ -26,13 +26,14 @@ import {
   computeEtag,
   etagMatches,
   getGlobalDataVersion,
-  getQuotaUsed,
   getTenantPlan,
-  limitForMetric,
   sealVersionForKeys,
-  spendQuota,
 } from "../quota";
-import { enforceGraphRowsBudget } from "../quota/read-budget";
+import {
+  graphQuotaDeniedResponse,
+  recordGraphRowsSpend,
+  reserveGraphRowsBudget,
+} from "../quota/read-budget";
 import { parseMilestone } from "../sync/parse";
 
 const LANE_LABEL_PREFIX = "graph:lane/";
@@ -162,7 +163,7 @@ export const graphRoute = async (c: Context<AuthEnv>) => {
   const etag = await computeEtag([
     dataVersion,
     visible.slice().sort().join(","),
-    sealVersionForKeys(sealedKeys),
+    await sealVersionForKeys(sealedKeys),
     searchParams.get("status") ?? "",
     searchParams.get("closed_under_open_epic") ?? "",
   ]);
@@ -171,12 +172,11 @@ export const graphRoute = async (c: Context<AuthEnv>) => {
     return c.body(null, 304, { ETag: etag });
   }
 
+  let tenantPlan: Awaited<ReturnType<typeof getTenantPlan>> | undefined;
   if (session?.tenantId) {
-    const plan = await getTenantPlan(c.env.DB, session.tenantId);
-    const used = await getQuotaUsed(c.env.DB, session.tenantId, "graph_rows");
-    if (used >= limitForMetric(plan, "graph_rows")) {
-      const denied = await enforceGraphRowsBudget(c, 1);
-      if (denied) return denied;
+    tenantPlan = await getTenantPlan(c.env.DB, session.tenantId);
+    if (!(await reserveGraphRowsBudget(c.env.DB, session.tenantId, tenantPlan))) {
+      return graphQuotaDeniedResponse(c);
     }
   }
 
@@ -328,14 +328,14 @@ export const graphRoute = async (c: Context<AuthEnv>) => {
     };
   });
 
-  if (session?.tenantId) {
-    const plan = await getTenantPlan(c.env.DB, session.tenantId);
-    const ok = await spendQuota(c.env.DB, session.tenantId, "graph_rows", rowsRead, plan, true);
-    if (!ok) {
-      const denied = await enforceGraphRowsBudget(c, rowsRead);
-      if (denied) return denied;
+  if (session?.tenantId && tenantPlan) {
+    if (!(await recordGraphRowsSpend(c.env.DB, session.tenantId, rowsRead, tenantPlan))) {
+      return graphQuotaDeniedResponse(c);
     }
   }
 
-  return c.json({ nodes, edges, repos }, 200, { ETag: etag });
+  return c.json({ nodes, edges, repos }, 200, {
+    ETag: etag,
+    "Cache-Control": "private, no-cache",
+  });
 };

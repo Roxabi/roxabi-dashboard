@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { getTenantQuotaStatus, spendQuota } from "./ledger";
+import { getTenantQuotaStatus, spendQuota, spendQuotaClamped } from "./ledger";
 
 function sqliteAsD1(db: Database.Database): D1Database {
   const wrap = (sql: string, args: unknown[] = []) => {
@@ -59,6 +59,22 @@ describe("quota ledger", () => {
     const webhook = status.metrics.find((m) => m.metric === "webhook_events");
     expect(webhook?.used).toBe(500);
     expect(webhook?.exhausted).toBe(true);
+  });
+
+  it("spendQuotaClamped records partial spend toward exhausted", async () => {
+    const sqlite = new Database(":memory:");
+    seedQuotaSchema(sqlite);
+    const db = sqliteAsD1(sqlite);
+
+    await spendQuota(db, 1, "graph_rows", 120_000, "free", true);
+    const partial = await spendQuotaClamped(db, 1, "graph_rows", 10_000, "free");
+    expect(partial.ok).toBe(false);
+    expect(partial.spent).toBe(5_000);
+
+    const status = await getTenantQuotaStatus(db, 1, "free");
+    const graph = status.metrics.find((m) => m.metric === "graph_rows");
+    expect(graph?.used).toBe(125_000);
+    expect(graph?.exhausted).toBe(true);
   });
 
   it("paid plan has higher graph_rows limit", async () => {

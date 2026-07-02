@@ -152,6 +152,21 @@ async function readBootstrapCompleteFlag(db: D1Database): Promise<boolean> {
   return row?.value === "1";
 }
 
+async function clearBootstrapCompleteCache(db: D1Database): Promise<void> {
+  await db
+    .prepare(
+      `DELETE FROM sync_control
+       WHERE tenant_id = 0 AND key IN (?, ?, ?, ?)`,
+    )
+    .bind(
+      BOOTSTRAP_COMPLETE_KEY,
+      CACHED_ISSUE_COUNT_KEY,
+      CACHED_REPOS_TOTAL_KEY,
+      CACHED_REPOS_SYNCED_KEY,
+    )
+    .run();
+}
+
 async function persistBootstrapCache(
   db: D1Database,
   status: Pick<SyncStatus, "issue_count" | "repos_total" | "repos_synced">,
@@ -176,10 +191,13 @@ async function persistBootstrapCache(
 }
 
 export async function isBootstrapComplete(db: D1Database): Promise<boolean> {
-  if (await readBootstrapCompleteFlag(db)) return true;
   const { repos_total, repos_synced } = await getRepoSyncProgress(db);
   if (repos_total === 0) return false;
-  return repos_synced >= repos_total;
+  const complete = repos_synced >= repos_total;
+  if (!complete && (await readBootstrapCompleteFlag(db))) {
+    await clearBootstrapCompleteCache(db);
+  }
+  return complete;
 }
 
 /**
@@ -292,23 +310,19 @@ export async function getSyncStatus(
   const bootstrapAllowed = await isBootstrapAllowed(db, syncCtx);
 
   if (await readBootstrapCompleteFlag(db)) {
-    const cached = await db
-      .prepare(
-        `SELECT key, value FROM sync_control
-         WHERE tenant_id = 0 AND key IN (?, ?, ?)`,
-      )
-      .bind(CACHED_ISSUE_COUNT_KEY, CACHED_REPOS_TOTAL_KEY, CACHED_REPOS_SYNCED_KEY)
-      .all<{ key: string; value: string }>();
-    const map = new Map((cached.results ?? []).map((r) => [r.key, r.value]));
-    return {
-      issue_count: Number.parseInt(map.get(CACHED_ISSUE_COUNT_KEY) ?? "0", 10),
-      sync_running,
-      initial_sync: false,
-      repos_total: Number.parseInt(map.get(CACHED_REPOS_TOTAL_KEY) ?? "0", 10),
-      repos_synced: Number.parseInt(map.get(CACHED_REPOS_SYNCED_KEY) ?? "0", 10),
-      sync_in_progress: false,
-      sync_halted: halted,
-    };
+    const live = await getRepoSyncProgress(db);
+    if (live.repos_synced >= live.repos_total && live.repos_total > 0) {
+      return {
+        issue_count: await getIssueCount(db),
+        sync_running,
+        initial_sync: false,
+        repos_total: live.repos_total,
+        repos_synced: live.repos_synced,
+        sync_in_progress: false,
+        sync_halted: halted,
+      };
+    }
+    await clearBootstrapCompleteCache(db);
   }
 
   const issue_count = await getIssueCount(db);

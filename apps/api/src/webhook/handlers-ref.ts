@@ -7,7 +7,14 @@
  */
 
 import { resolveInstallToken } from "../auth/installToken";
-import { markRepoDirty, shouldRunBranchRescan } from "../quota";
+import {
+  type TenantPlan,
+  getQuotaUsed,
+  limitForMetric,
+  markRepoDirty,
+  shouldRunBranchRescan,
+  spendQuota,
+} from "../quota";
 import { BRANCH_ISSUE_RE, syncBranches } from "../sync/sync";
 import type { Env } from "../types";
 import { renameMilestone, setActiveBranch, upsertPrState } from "./mutations";
@@ -52,6 +59,7 @@ export async function handleRefDelete(
   payload: Record<string, unknown>,
   db: D1Database,
   env: Env,
+  quota?: { tenantId: number; plan: TenantPlan },
 ): Promise<boolean> {
   if (payload.ref_type !== "branch") {
     return false;
@@ -78,12 +86,24 @@ export async function handleRefDelete(
   const name = repo.slice(slashIdx + 1);
 
   if (!(await shouldRunBranchRescan(db, repo))) {
-    return true;
+    return false;
+  }
+
+  if (quota) {
+    const used = await getQuotaUsed(db, quota.tenantId, "gh_fetches");
+    const limit = limitForMetric(quota.plan, "gh_fetches");
+    if (used >= limit) {
+      await markRepoDirty(db, repo);
+      return false;
+    }
   }
 
   try {
     const token = await resolveInstallToken(db, env, owner, name);
     await syncBranches(db, token, owner, name);
+    if (quota) {
+      await spendQuota(db, quota.tenantId, "gh_fetches", 1, quota.plan, true);
+    }
     return true;
   } catch (err) {
     console.error(
@@ -91,7 +111,7 @@ export async function handleRefDelete(
       err,
     );
     await markRepoDirty(db, repo);
-    return true;
+    return false;
   }
 }
 

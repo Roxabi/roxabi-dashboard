@@ -13,6 +13,7 @@ export {
   getTenantPlan,
   getTenantQuotaStatus,
   spendQuota,
+  spendQuotaClamped,
   utcQuotaDay,
 } from "./ledger";
 export { computeEtag, etagMatches, getGlobalDataVersion, sealVersionForKeys } from "./etag";

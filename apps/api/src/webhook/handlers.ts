@@ -160,11 +160,11 @@ export async function webhookRoute(c: Context<{ Bindings: Env }>): Promise<Respo
     } else if (event === "create") {
       mutated = await handleRefCreate(payload, db);
     } else if (event === "delete") {
-      mutated = await handleRefDelete(payload, db, c.env);
-      if (mutated && tenant != null) {
-        const plan = await getTenantPlan(db, tenant.id);
-        await spendQuota(db, tenant.id, "gh_fetches", 1, plan, true);
-      }
+      const deleteQuota =
+        tenant != null
+          ? { tenantId: tenant.id, plan: await getTenantPlan(db, tenant.id) }
+          : undefined;
+      mutated = await handleRefDelete(payload, db, c.env, deleteQuota);
     } else if (event === "pull_request") {
       mutated = await handlePullRequest(payload, db);
     } else if (event === "milestone") {

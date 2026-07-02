@@ -24,8 +24,8 @@ export async function getGlobalDataVersion(db: D1Database): Promise<string> {
   return row?.v ?? "";
 }
 
-export function sealVersionForKeys(sealedKeys: Set<string>): string {
+export async function sealVersionForKeys(sealedKeys: Set<string>): Promise<string> {
   if (sealedKeys.size === 0) return "0";
   const sorted = [...sealedKeys].sort();
-  return `${sorted.length}:${sorted[0]}:${sorted[sorted.length - 1]}`;
+  return computeEtag(sorted);
 }

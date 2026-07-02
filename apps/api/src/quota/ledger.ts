@@ -110,6 +110,37 @@ export async function spendQuota(
   return result.meta.changes > 0;
 }
 
+/**
+ * Record up to remaining headroom (never exceeds limit). Returns whether the
+ * full `amount` fit — partial spends still advance `used` so repeat offenders
+ * reach exhausted state.
+ */
+export async function spendQuotaClamped(
+  db: D1Database,
+  tenantId: number,
+  metric: QuotaMetric,
+  amount: number,
+  plan: TenantPlan,
+): Promise<{ ok: boolean; spent: number }> {
+  if (amount <= 0) return { ok: true, spent: 0 };
+  const day = utcQuotaDay();
+  const limit = limitForMetric(plan, metric);
+  await seedQuotaRow(db, tenantId, day, metric);
+  const used = await getQuotaUsed(db, tenantId, metric, day);
+  const headroom = Math.max(0, limit - used);
+  const spent = Math.min(amount, headroom);
+  if (spent > 0) {
+    await db
+      .prepare(
+        `UPDATE tenant_quota_daily SET used = used + ?
+         WHERE tenant_id = ? AND day = ? AND metric = ?`,
+      )
+      .bind(spent, tenantId, day, metric)
+      .run();
+  }
+  return { ok: amount <= headroom, spent };
+}
+
 export async function getTenantQuotaStatus(
   db: D1Database,
   tenantId: number,

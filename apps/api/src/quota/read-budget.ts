@@ -4,23 +4,39 @@
 
 import type { Context } from "hono";
 import type { AuthEnv } from "../auth/types";
-import { getTenantPlan, spendQuota } from "./ledger";
+import { getQuotaUsed, spendQuotaClamped } from "./ledger";
+import { type TenantPlan, limitForMetric } from "./limits";
 
-export async function enforceGraphRowsBudget(
-  c: Context<AuthEnv>,
-  rowsRead: number,
-): Promise<Response | null> {
-  const session = c.get("session");
-  if (!session?.tenantId || rowsRead <= 0) return null;
+/** Conservative lower bound for one full graph rebuild @ ~5k issues. */
+export const MIN_GRAPH_REBUILD_ROWS = 25_000;
 
-  const plan = await getTenantPlan(c.env.DB, session.tenantId);
-  const ok = await spendQuota(c.env.DB, session.tenantId, "graph_rows", rowsRead, plan, true);
-  if (ok) return null;
-
+export function graphQuotaDeniedResponse(c: Context<AuthEnv>): Response {
   const retryAfter = secondsUntilUtcMidnight();
   return c.json({ error: "quota_exceeded", metric: "graph_rows", retry_after: retryAfter }, 429, {
     "Retry-After": String(retryAfter),
   });
+}
+
+/** Gate before expensive corpus scans — deny when exhausted or insufficient headroom. */
+export async function reserveGraphRowsBudget(
+  db: D1Database,
+  tenantId: number,
+  plan: TenantPlan,
+): Promise<boolean> {
+  const used = await getQuotaUsed(db, tenantId, "graph_rows");
+  const limit = limitForMetric(plan, "graph_rows");
+  return used < limit && limit - used >= MIN_GRAPH_REBUILD_ROWS;
+}
+
+export async function recordGraphRowsSpend(
+  db: D1Database,
+  tenantId: number,
+  rowsRead: number,
+  plan: TenantPlan,
+): Promise<boolean> {
+  if (rowsRead <= 0) return true;
+  const { ok } = await spendQuotaClamped(db, tenantId, "graph_rows", rowsRead, plan);
+  return ok;
 }
 
 function secondsUntilUtcMidnight(): number {
