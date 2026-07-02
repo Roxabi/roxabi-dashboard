@@ -235,10 +235,7 @@ export async function callbackRoute(c: Context<{ Bindings: Env }>): Promise<Resp
     id: number;
     account: { login: string; type: string };
   }> = [];
-  const installRes = await githubRestGet(
-    "https://api.github.com/user/installations",
-    access_token,
-  );
+  const installRes = await githubRestGet("https://api.github.com/user/installations", access_token);
   if (installRes.ok) {
     const body = (await installRes.json()) as {
       installations?: Array<{

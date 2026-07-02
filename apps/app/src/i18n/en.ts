@@ -135,6 +135,14 @@ export const en: Translations = {
       detail: "{count} to decrypt",
     },
   },
+  quota: {
+    title: "Daily quota",
+    generic: "Some operations are temporarily limited.",
+    deferred: "Updates deferred — the board may lag until 00:00 UTC.",
+    syncPaused: "Sync paused until quota resets (00:00 UTC).",
+    readLimited: "Graph reload limited — retry after 00:00 UTC.",
+    resetHint: "resets at 00:00 UTC",
+  },
   dim: {
     label: {
       rows: "Rows",

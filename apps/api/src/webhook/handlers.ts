@@ -13,6 +13,7 @@
 import type { Context } from "hono";
 import type { Env } from "../types";
 
+import { getTenantPlan, markRepoDirty, spendQuota } from "../quota";
 import { handleMember, handleMembership, handleRepository } from "./handlers-access";
 import { handleInstallation, handleInstallationRepositories } from "./handlers-app";
 import { handleDeps, handleIssues, handleSubIssues } from "./handlers-issues";
@@ -131,6 +132,19 @@ export async function webhookRoute(c: Context<{ Bindings: Env }>): Promise<Respo
     }
   }
 
+  const isDataEvent = DATA_EVENTS.has(event);
+  if (isDataEvent && tenant != null) {
+    const plan = await getTenantPlan(db, tenant.id);
+    const webhookOk = await spendQuota(db, tenant.id, "webhook_events", 1, plan, true);
+    if (!webhookOk) {
+      const repoFull = (payload.repository as Record<string, unknown> | undefined)?.full_name;
+      if (typeof repoFull === "string" && repoFull.length > 0) {
+        await markRepoDirty(db, repoFull);
+      }
+      return c.json({ ok: true, deferred: true });
+    }
+  }
+
   let mutated = false;
 
   try {
@@ -144,17 +158,17 @@ export async function webhookRoute(c: Context<{ Bindings: Env }>): Promise<Respo
       const changed = await handleSubIssues(payload, db);
       mutated = changed > 0;
     } else if (event === "create") {
-      await handleRefCreate(payload, db);
-      mutated = true;
+      mutated = await handleRefCreate(payload, db);
     } else if (event === "delete") {
-      await handleRefDelete(payload, db, c.env);
-      mutated = true;
+      mutated = await handleRefDelete(payload, db, c.env);
+      if (mutated && tenant != null) {
+        const plan = await getTenantPlan(db, tenant.id);
+        await spendQuota(db, tenant.id, "gh_fetches", 1, plan, true);
+      }
     } else if (event === "pull_request") {
-      await handlePullRequest(payload, db);
-      mutated = true;
+      mutated = await handlePullRequest(payload, db);
     } else if (event === "milestone") {
-      await handleMilestone(payload, db);
-      mutated = true;
+      mutated = await handleMilestone(payload, db);
       // App lifecycle events self-bump data_version inside their atomic batch — do not set `mutated`.
     } else if (event === "installation") {
       await handleInstallation(payload, db, c.env);

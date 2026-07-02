@@ -19,6 +19,7 @@
 import { getInstallationToken } from "../auth/installToken";
 import { loadZkSealedIssueKeys } from "../auth/zk";
 import { zkStructureOnlyEnabled } from "../auth/zk-flags";
+import { isSyncBudgetExhausted, trySpendSyncPage } from "../quota";
 import type { Env } from "../types";
 import { type RunOutcome, writeRunAudit } from "./audit";
 import { syncRepoBundle } from "./bundle";
@@ -265,6 +266,19 @@ export async function runSync(env: Env, opts?: RunSyncOptions): Promise<void> {
       const name = repo.slice(slash + 1);
       // biome-ignore lint/style/noNonNullAssertion: windowedRepos is derived from repoTenantMap keys, so every repo is present.
       const repoTenants = repoTenantMap.get(repo)!;
+      const budgetTenantId = opts?.tenantId;
+      if (budgetTenantId != null) {
+        if (await isSyncBudgetExhausted(db, budgetTenantId)) {
+          reposSkipped += 1;
+          console.log(`[sync] tenant ${budgetTenantId} sync_pages exhausted — skipping ${repo}`);
+          continue;
+        }
+        const pageOk = await trySpendSyncPage(db, budgetTenantId);
+        if (!pageOk) {
+          reposSkipped += 1;
+          continue;
+        }
+      }
       const resolveToken = makeRepoResolver(repoTenants);
       try {
         const token = await resolveToken();

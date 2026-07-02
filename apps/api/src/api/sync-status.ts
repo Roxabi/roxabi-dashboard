@@ -26,6 +26,7 @@ export async function syncStatusRoute(c: Context<AuthEnv>): Promise<Response> {
   const hasLinkedTenant = s.tenantId != null;
   const syncCtx = {
     userId: s.userId,
+    tenantId: s.tenantId ?? undefined,
     zkAccountKeyEnabled: zkAccountKeyEnabled(c.env),
   };
   if (!(await isBootstrapComplete(c.env.DB))) {

@@ -54,9 +54,7 @@ export function sanitizeAuthRedirect(raw: string | undefined): string {
  */
 export function isDashboardDest(path: string): boolean {
   const url = new URL(path, "https://_/");
-  return (
-    url.pathname === "/" || url.pathname === "/dashboard" || url.pathname === "/dashboard/"
-  );
+  return url.pathname === "/" || url.pathname === "/dashboard" || url.pathname === "/dashboard/";
 }
 
 /** Remove ?install=1 — only needed to trigger server-side re-OAuth, not for rendering. */

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { postAccountDeleteRoute } from "./api/account-delete";
 import { activeTenantRoute } from "./api/active-tenant";
 import { adminSyncRoute } from "./api/admin";
+import { adminQuotaGetRoute, adminQuotaPostRoute } from "./api/admin-quota";
 import { checkAdminAuth } from "./api/auth";
 import { consentRoute } from "./api/consent";
 import { graphRoute } from "./api/graph";
@@ -9,6 +10,7 @@ import { installCompleteRoute } from "./api/install-complete";
 import { installRefreshRoute } from "./api/install-refresh";
 import { getIssueRoute, listIssuesRoute } from "./api/issues";
 import { logoutRoute, meRoute } from "./api/me";
+import { tenantQuotaRoute } from "./api/quota";
 import { releaseRoute } from "./api/release";
 import { syncStatusRoute } from "./api/sync-status";
 import {
@@ -91,6 +93,8 @@ app.use("/admin/*", async (c, next) => {
 
 // POST /admin/sync — out-of-band sync trigger (#123: token-gated above).
 app.post("/admin/sync", adminSyncRoute);
+app.get("/admin/quota", adminQuotaGetRoute);
+app.post("/admin/quota", adminQuotaPostRoute);
 
 // GET /health — db reachability + issue count (mirrors Python app.py::health).
 app.get("/health", async (c) => {
@@ -117,35 +121,45 @@ app.get("/health", async (c) => {
   }
   if (dbReachable) {
     try {
-      const {
-        getRepoSyncDiagnostics,
-        isBootstrapComplete,
-        isGlobalSyncRunning,
-        listUnsyncedRepos,
-      } = await import("./sync/bootstrap");
+      const { isBootstrapComplete, isGlobalSyncRunning } = await import("./sync/bootstrap");
       const { isHalted } = await import("./sync/control");
-      const { maybeRefreshTenantDiscovery } = await import("./sync/discovery-refresh");
-      const { maybePruneDeadAccessibleRepos } = await import("./sync/dead-repo-prune");
-      if (!(await isBootstrapComplete(c.env.DB))) {
+      const bootstrapComplete = await isBootstrapComplete(c.env.DB);
+      if (!bootstrapComplete) {
+        const { getRepoSyncDiagnostics, listUnsyncedRepos, maybeScheduleMaintenanceBootstrap } =
+          await import("./sync/bootstrap");
+        const { maybeRefreshTenantDiscovery } = await import("./sync/discovery-refresh");
+        const { maybePruneDeadAccessibleRepos } = await import("./sync/dead-repo-prune");
         await maybePruneDeadAccessibleRepos(c.env);
         await maybeRefreshTenantDiscovery(c.env);
-        const { maybeScheduleMaintenanceBootstrap } = await import("./sync/bootstrap");
         await maybeScheduleMaintenanceBootstrap(c.env.DB, c.env, c.executionCtx);
+        const progress = await getRepoSyncDiagnostics(c.env.DB);
+        const unsynced = await listUnsyncedRepos(c.env.DB);
+        sync = {
+          repos_total: progress.repos_total,
+          repos_synced: progress.repos_synced,
+          repos_registry: progress.repos_registry,
+          repos_accessible: progress.repos_accessible,
+          progress_basis: progress.progress_basis,
+          repos_unsynced: unsynced.length,
+          unsynced_repos: unsynced,
+          sync_running: await isGlobalSyncRunning(c.env.DB),
+          sync_halted: await isHalted(c.env.DB, 0),
+          bootstrap_complete: false,
+        };
+      } else {
+        sync = {
+          repos_total: 0,
+          repos_synced: 0,
+          repos_registry: 0,
+          repos_accessible: 0,
+          progress_basis: "tenant_repo_access",
+          repos_unsynced: 0,
+          unsynced_repos: [],
+          sync_running: await isGlobalSyncRunning(c.env.DB),
+          sync_halted: await isHalted(c.env.DB, 0),
+          bootstrap_complete: true,
+        };
       }
-      const progress = await getRepoSyncDiagnostics(c.env.DB);
-      const unsynced = await listUnsyncedRepos(c.env.DB);
-      sync = {
-        repos_total: progress.repos_total,
-        repos_synced: progress.repos_synced,
-        repos_registry: progress.repos_registry,
-        repos_accessible: progress.repos_accessible,
-        progress_basis: progress.progress_basis,
-        repos_unsynced: unsynced.length,
-        unsynced_repos: unsynced,
-        sync_running: await isGlobalSyncRunning(c.env.DB),
-        sync_halted: await isHalted(c.env.DB, 0),
-        bootstrap_complete: await isBootstrapComplete(c.env.DB),
-      };
     } catch {
       // sync probe optional — issue_count still reported
     }
@@ -172,6 +186,8 @@ app.post("/api/consent", requireSameOriginPost, requireLinkedTenant, consentRout
 app.post("/api/install/refresh", requireSameOriginPost, requireSession, installRefreshRoute);
 app.use("/api/sync/status", requireLinkedTenant);
 app.get("/api/sync/status", syncStatusRoute);
+app.use("/api/quota", requireLinkedTenant);
+app.get("/api/quota", tenantQuotaRoute);
 app.post("/api/active-tenant", requireSameOriginPost, requireLinkedTenant, activeTenantRoute);
 app.post("/api/zk-opt-in", requireSameOriginPost, requireLinkedTenant, zkOptInRoute);
 app.use("/api/zk/payloads", requireLinkedTenant);
