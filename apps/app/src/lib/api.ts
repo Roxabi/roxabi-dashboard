@@ -13,6 +13,7 @@ export class ApiError extends Error {
     readonly status: number,
     message: string,
     readonly body?: unknown,
+    readonly retryAfter?: number,
   ) {
     super(message);
     this.name = "ApiError";
@@ -71,7 +72,40 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
       parsed && typeof parsed === "object" && "error" in parsed
         ? String((parsed as { error: unknown }).error)
         : `${res.status} ${res.statusText}`;
-    throw new ApiError(res.status, message, parsed);
+    const retryHeader = res.headers.get("retry-after");
+    const retryAfter = retryHeader ? Number.parseInt(retryHeader, 10) : undefined;
+    throw new ApiError(res.status, message, parsed, retryAfter);
   }
   return parsed as T;
+}
+
+export interface ConditionalFetchResult<T> {
+  data: T | null;
+  notModified: boolean;
+  etag: string | null;
+}
+
+/** GET with If-None-Match — returns notModified=true on HTTP 304. */
+export async function apiFetchConditional<T>(
+  path: string,
+  ifNoneMatch?: string | null,
+): Promise<ConditionalFetchResult<T>> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (ifNoneMatch) headers["If-None-Match"] = ifNoneMatch;
+  const res = await fetch(buildUrl(path), { credentials: "include", headers });
+  const etag = res.headers.get("etag");
+  if (res.status === 304) {
+    return { data: null, notModified: true, etag: etag ?? ifNoneMatch ?? null };
+  }
+  const parsed = await parseBody(res);
+  if (!res.ok) {
+    const message =
+      parsed && typeof parsed === "object" && "error" in parsed
+        ? String((parsed as { error: unknown }).error)
+        : `${res.status} ${res.statusText}`;
+    const retryHeader = res.headers.get("retry-after");
+    const retryAfter = retryHeader ? Number.parseInt(retryHeader, 10) : undefined;
+    throw new ApiError(res.status, message, parsed, retryAfter);
+  }
+  return { data: parsed as T, notModified: false, etag };
 }

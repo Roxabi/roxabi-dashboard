@@ -134,6 +134,15 @@ export const fr = {
       detail: "{count} à déchiffrer",
     },
   },
+  quota: {
+    title: "Quota journalier",
+    generic: "Certaines opérations sont temporairement limitées.",
+    deferred:
+      "Mises à jour en attente — le tableau peut être en léger décalage jusqu'à minuit UTC.",
+    syncPaused: "Synchronisation en pause jusqu'au renouvellement du quota (00:00 UTC).",
+    readLimited: "Rechargement du graphe limité — réessayez après minuit UTC.",
+    resetHint: "renouvellement à 00:00 UTC",
+  },
   dim: {
     label: {
       rows: "Lignes",

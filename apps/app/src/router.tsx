@@ -3,6 +3,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { SignInScreen } from "@/auth/SignInScreen";
 import { AppShell } from "@/components/AppShell";
 import { BoardView } from "@/components/BoardView";
+import { QuotaBanner } from "@/components/QuotaBanner";
 import { SyncProgressBanner } from "@/components/SyncProgressBanner";
 import { TitleSyncBanner } from "@/components/TitleSyncBanner";
 import { useSyncProgressMonitor } from "@/hooks/useSyncProgressMonitor";
@@ -92,6 +93,7 @@ function Dashboard() {
         allowGithubLink={githubLinkExhausted}
         githubLogin={login}
       />
+      <QuotaBanner />
       <SyncProgressBanner status={syncStatus} />
       <TitleSyncBanner syncing={isSyncingTitles} count={syncingTitleCount} />
       {isError ? (

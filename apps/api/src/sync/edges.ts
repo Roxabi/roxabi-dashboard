@@ -29,7 +29,7 @@ export function edgesForRepo(
 export async function flushEdges(
   db: D1Database,
   collectedEdges: Map<string, EdgeData>,
-): Promise<void> {
+): Promise<number> {
   const allStmts: D1PreparedStatement[] = [];
 
   for (const [issueKey, { parents, children, blockedBy, blocking }] of collectedEdges) {
@@ -70,7 +70,7 @@ export async function flushEdges(
     }
   }
 
-  await batchChunked(db, allStmts);
+  return batchChunked(db, allStmts);
 }
 interface StubIssueData {
   repository: {

@@ -22,6 +22,18 @@ import {
   parseClosedUnderOpenEpicQuery,
   parseStatusQuery,
 } from "../graph/status";
+import {
+  computeEtag,
+  etagMatches,
+  getGlobalDataVersion,
+  getTenantPlan,
+  sealVersionForKeys,
+} from "../quota";
+import {
+  graphQuotaDeniedResponse,
+  recordGraphRowsSpend,
+  reserveGraphRowsBudget,
+} from "../quota/read-budget";
 import { parseMilestone } from "../sync/parse";
 
 const LANE_LABEL_PREFIX = "graph:lane/";
@@ -141,7 +153,35 @@ export const graphRoute = async (c: Context<AuthEnv>) => {
     return c.json({ nodes: [], edges: [], repos: [] });
   }
 
+  const searchParams = new URL(c.req.url).searchParams;
+  const statusFilter = parseStatusQuery(searchParams.get("status"));
+  const closedUnderOpenEpic = parseClosedUnderOpenEpicQuery(
+    searchParams.get("closed_under_open_epic"),
+  );
+
+  const dataVersion = await getGlobalDataVersion(c.env.DB);
+  const etag = await computeEtag([
+    dataVersion,
+    visible.slice().sort().join(","),
+    await sealVersionForKeys(sealedKeys),
+    searchParams.get("status") ?? "",
+    searchParams.get("closed_under_open_epic") ?? "",
+  ]);
+
+  if (etagMatches(c.req.header("if-none-match"), etag)) {
+    return c.body(null, 304, { ETag: etag });
+  }
+
+  let tenantPlan: Awaited<ReturnType<typeof getTenantPlan>> | undefined;
+  if (session?.tenantId) {
+    tenantPlan = await getTenantPlan(c.env.DB, session.tenantId);
+    if (!(await reserveGraphRowsBudget(c.env.DB, session.tenantId, tenantPlan))) {
+      return graphQuotaDeniedResponse(c);
+    }
+  }
+
   const ph = visible.map(() => "?").join(",");
+  let rowsRead = 0;
 
   // (a) labels → Map<issueKey, string[]> — scoped to visible issues only
   const labelRows = await c.env.DB.prepare(
@@ -149,6 +189,7 @@ export const graphRoute = async (c: Context<AuthEnv>) => {
   )
     .bind(...visible)
     .all<LabelRow>();
+  rowsRead += labelRows.meta?.rows_read ?? 0;
   const labelsByIssue = new Map<string, string[]>();
   for (const row of labelRows.results) {
     const existing = labelsByIssue.get(row.issue_key);
@@ -168,6 +209,7 @@ export const graphRoute = async (c: Context<AuthEnv>) => {
   )
     .bind(...visible)
     .all<PrStateRow>();
+  rowsRead += prRows.meta?.rows_read ?? 0;
   const openPrsByIssue = new Map<string, PrInfo[]>();
   for (const row of prRows.results) {
     if (!row.closing_issue_keys) continue;
@@ -194,12 +236,7 @@ export const graphRoute = async (c: Context<AuthEnv>) => {
   )
     .bind(...visible)
     .all<IssueRow>();
-
-  const searchParams = new URL(c.req.url).searchParams;
-  const statusFilter = parseStatusQuery(searchParams.get("status"));
-  const closedUnderOpenEpic = parseClosedUnderOpenEpicQuery(
-    searchParams.get("closed_under_open_epic"),
-  );
+  rowsRead += issueRows.meta?.rows_read ?? 0;
 
   let nodes: Node[] = issueRows.results.map((row) => {
     const issueLabels = labelsByIssue.get(row.key) ?? [];
@@ -235,6 +272,7 @@ export const graphRoute = async (c: Context<AuthEnv>) => {
   )
     .bind(...visible, ...visible)
     .all<EdgeRow>();
+  rowsRead += edgeRows.meta?.rows_read ?? 0;
 
   let edges: Edge[] = edgeRows.results.map((row) => ({
     src: row.src_key,
@@ -277,6 +315,7 @@ export const graphRoute = async (c: Context<AuthEnv>) => {
       .bind(...visible)
       .all<RepoActivityRow>(),
   ]);
+  rowsRead += (repoRows.meta?.rows_read ?? 0) + (activityRows.meta?.rows_read ?? 0);
   const activityByRepo = new Map((activityRows.results ?? []).map((row) => [row.repo, row]));
   const repos = (repoRows.results ?? []).map((r) => {
     const activity = activityByRepo.get(r.repo);
@@ -289,5 +328,14 @@ export const graphRoute = async (c: Context<AuthEnv>) => {
     };
   });
 
-  return c.json({ nodes, edges, repos });
+  if (session?.tenantId && tenantPlan) {
+    if (!(await recordGraphRowsSpend(c.env.DB, session.tenantId, rowsRead, tenantPlan))) {
+      return graphQuotaDeniedResponse(c);
+    }
+  }
+
+  return c.json({ nodes, edges, repos }, 200, {
+    ETag: etag,
+    "Cache-Control": "private, no-cache",
+  });
 };

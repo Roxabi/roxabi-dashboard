@@ -5,7 +5,8 @@
  * a baseline, not a change, so it never refetches on mount.
  */
 
-import { apiFetch } from "@/lib/api";
+import { apiFetchConditional } from "@/lib/api";
+import { clearGraphEtag, getVersionEtag, setVersionEtag } from "@/lib/etag-cache";
 import type { VersionResponse } from "@roxabi-live/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
@@ -19,7 +20,15 @@ export function useVersionPoll(): void {
 
   const { data } = useQuery({
     queryKey: ["version"],
-    queryFn: () => apiFetch<VersionResponse>("/api/version"),
+    queryFn: async ({ client }) => {
+      const result = await apiFetchConditional<VersionResponse>("/api/version", getVersionEtag());
+      if (result.notModified) {
+        const cached = client.getQueryData<VersionResponse>(["version"]);
+        if (cached) return cached;
+      }
+      setVersionEtag(result.etag);
+      return result.data as VersionResponse;
+    },
     refetchInterval: VERSION_POLL_MS,
   });
 
@@ -32,6 +41,7 @@ export function useVersionPoll(): void {
     }
     if (lastSeen.current !== version) {
       lastSeen.current = version;
+      clearGraphEtag();
       void queryClient.invalidateQueries({ queryKey: GRAPH_QUERY_KEY });
     }
   }, [data?.version, queryClient]);

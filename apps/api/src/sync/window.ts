@@ -10,6 +10,8 @@ const BOOTSTRAP_CURSOR_KEY = "bootstrap_cursor";
 export interface RunSyncOptions {
   /** Bootstrap: sync only repos missing sync_state (up to WINDOW), skip slot rotation. */
   prioritizeUnsynced?: boolean;
+  /** When set, sync_pages budget is checked for this tenant before each repo pass. */
+  tenantId?: number;
 }
 
 /** Union of repos granted across all active tenant installations. */

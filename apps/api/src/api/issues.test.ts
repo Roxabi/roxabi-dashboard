@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveVisibleRepos } from "../auth/repoAccess";
+import { getTenantPlan } from "../quota";
+import { recordGraphRowsSpend, reserveGraphRowsBudget } from "../quota/read-budget";
 import { app } from "../router";
 import type { Env } from "../types";
 
@@ -12,6 +14,22 @@ import type { Env } from "../types";
 vi.mock("../auth/repoAccess", () => ({
   resolveVisibleRepos: vi.fn(),
 }));
+
+vi.mock("../quota/read-budget", () => ({
+  graphQuotaDeniedResponse: vi.fn(),
+  recordGraphRowsSpend: vi.fn().mockResolvedValue(true),
+  reserveGraphRowsBudget: vi.fn().mockResolvedValue(true),
+  sumRowsRead: (results: Array<{ meta?: { rows_read?: number } }>) =>
+    results.reduce((sum, r) => sum + (r.meta?.rows_read ?? 0), 0),
+}));
+
+vi.mock("../quota", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../quota")>();
+  return {
+    ...actual,
+    getTenantPlan: vi.fn().mockResolvedValue("free"),
+  };
+});
 
 vi.mock("../auth/session", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../auth/session")>();
@@ -34,12 +52,15 @@ vi.mock("../auth/session", async (importOriginal) => {
 const DEFAULT_VISIBLE = ["Roxabi/roxabi-live"];
 
 afterEach(() => {
-  vi.restoreAllMocks();
+  vi.clearAllMocks();
 });
 
 beforeEach(() => {
   // Default: the repo used by makeIssueRow fixtures is visible. Override per test.
   vi.mocked(resolveVisibleRepos).mockResolvedValue(DEFAULT_VISIBLE);
+  vi.mocked(getTenantPlan).mockResolvedValue("free");
+  vi.mocked(reserveGraphRowsBudget).mockResolvedValue(true);
+  vi.mocked(recordGraphRowsSpend).mockResolvedValue(true);
 });
 
 // ── Env builders ─────────────────────────────────────────────────────────────

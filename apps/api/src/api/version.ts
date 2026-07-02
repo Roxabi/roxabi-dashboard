@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { etagMatches } from "../quota";
 import type { Env } from "../types";
 
 /**
@@ -24,5 +25,10 @@ export const versionRoute = async (c: Context<{ Bindings: Env }>) => {
        SELECT COALESCE(value, '') AS v FROM sync_control WHERE key = 'data_version' AND tenant_id = 0
      )`,
   ).first<{ version: string | null }>();
-  return c.json({ version: row?.version ?? "" });
+  const version = row?.version ?? "";
+  const etag = `"${version}"`;
+  if (etagMatches(c.req.header("if-none-match"), etag)) {
+    return c.body(null, 304, { ETag: etag, "Cache-Control": "max-age=10" });
+  }
+  return c.json({ version }, 200, { ETag: etag, "Cache-Control": "max-age=10" });
 };

@@ -7,7 +7,8 @@
  * (status[], closed_under_open_epic) join the queryKey in slice 3.
  */
 
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetchConditional } from "@/lib/api";
+import { getGraphEtag, setGraphEtag } from "@/lib/etag-cache";
 import {
   type AnnotatedNode,
   type GraphEdge,
@@ -23,7 +24,23 @@ export const GRAPH_QUERY_KEY = ["graph"] as const;
 export function useGraphData() {
   const query = useQuery({
     queryKey: GRAPH_QUERY_KEY,
-    queryFn: () => apiFetch<GraphResponse>("/api/graph"),
+    queryFn: async ({ client }) => {
+      try {
+        const result = await apiFetchConditional<GraphResponse>("/api/graph", getGraphEtag());
+        if (result.notModified) {
+          const cached = client.getQueryData<GraphResponse>(GRAPH_QUERY_KEY);
+          if (cached) return cached;
+        }
+        setGraphEtag(result.etag);
+        return result.data as GraphResponse;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 429) {
+          const cached = client.getQueryData<GraphResponse>(GRAPH_QUERY_KEY);
+          if (cached) return cached;
+        }
+        throw err;
+      }
+    },
   });
 
   const nodes = useMemo<AnnotatedNode[]>(

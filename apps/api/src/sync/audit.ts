@@ -32,6 +32,7 @@ export interface RunAuditInfo {
   before?: { issues: number; edges: number; prs: number };
   reposSynced?: number;
   reposSkipped?: number;
+  quotaTenants?: Array<{ tenant_id: number; sync_pages: number; sync_writes: number }>;
   corrections?: RunCorrections;
 }
 
@@ -89,6 +90,7 @@ export async function writeRunAudit(env: Env, db: D1Database, info: RunAuditInfo
       // #80 — durable trace of what this reconcile run corrected
       reposSynced,
       reposSkipped,
+      quotaTenants: info.quotaTenants ?? [],
       deltas,
       corrections: {
         stubsCreated: info.stubs,
