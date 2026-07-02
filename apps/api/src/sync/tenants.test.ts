@@ -16,7 +16,7 @@ vi.mock("./control", async (importOriginal) => {
     ...actual,
     acquireSyncLock: vi.fn().mockResolvedValue(true),
     releaseSyncLock: vi.fn().mockResolvedValue(undefined),
-    batchChunked: vi.fn().mockResolvedValue(undefined),
+    batchChunked: vi.fn().mockResolvedValue(0),
     incrementAuthFailures: vi.fn().mockResolvedValue(0),
   };
 });

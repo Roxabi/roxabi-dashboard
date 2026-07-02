@@ -51,6 +51,11 @@ interface BundleData {
  *   - PR stale-close via applyPrState
  *   - edges collected into collectedEdges (flushed by caller in pass 2)
  */
+export interface RepoBundleResult {
+  stalePrsClosed: number;
+  rowsWritten: number;
+}
+
 export async function syncRepoBundle(
   db: D1Database,
   token: string,
@@ -60,7 +65,7 @@ export async function syncRepoBundle(
   fullSync = false,
   sealedKeys: ReadonlySet<string> = new Set(),
   structureOnly = false,
-): Promise<number> {
+): Promise<RepoBundleResult> {
   const repo = `${owner}/${name}`;
 
   // Watermark gates the incremental fetch. fullSync (#80) forces since=null so a
@@ -91,6 +96,7 @@ export async function syncRepoBundle(
   const nowIso = new Date().toISOString();
 
   let pages = 0;
+  let rowsWritten = 0;
 
   while (!(issuesDone && refsDone && prsDone)) {
     if (pages >= MAX_PAGES) break;
@@ -149,7 +155,7 @@ export async function syncRepoBundle(
         collectEdges(node, repo, key, collectedEdges);
       }
 
-      await batchChunked(db, pageStmts);
+      rowsWritten += await batchChunked(db, pageStmts);
 
       if (!issuesPage.pageInfo.hasNextPage || !issuesPage.pageInfo.endCursor) {
         issuesDone = true;
@@ -214,5 +220,6 @@ export async function syncRepoBundle(
   // Apply branch + PR state (deferred so all pages are fetched first).
   // Returns the count of stale open PRs closed, surfaced into the run audit.
   await applyActiveBranches(db, repo, matchedBranchNumbers);
-  return applyPrState(db, repo, prUpsertStmts, seenPrNumbers);
+  const stalePrsClosed = await applyPrState(db, repo, prUpsertStmts, seenPrNumbers);
+  return { stalePrsClosed, rowsWritten };
 }

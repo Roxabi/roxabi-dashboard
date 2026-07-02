@@ -19,7 +19,7 @@
 import { getInstallationToken } from "../auth/installToken";
 import { loadZkSealedIssueKeys } from "../auth/zk";
 import { zkStructureOnlyEnabled } from "../auth/zk-flags";
-import { isSyncBudgetExhausted, trySpendSyncPage } from "../quota";
+import { getQuotaUsed, isSyncBudgetExhausted, recordSyncWrites, trySpendSyncPage } from "../quota";
 import type { Env } from "../types";
 import { type RunOutcome, writeRunAudit } from "./audit";
 import { syncRepoBundle } from "./bundle";
@@ -36,6 +36,7 @@ import {
 } from "./control";
 import { closedHopPass, edgesForRepo, flushEdges } from "./edges";
 import type { EdgeData } from "./label-vocab";
+import { pruneStaleRepoData } from "./prune-stale-repos";
 import { handleRepoSyncFailure } from "./repo-access-prune";
 import { discoverTenants } from "./tenants";
 import { type RunSyncOptions, selectWindowedRepos } from "./window";
@@ -97,6 +98,7 @@ export async function runSync(env: Env, opts?: RunSyncOptions): Promise<void> {
   let staleTenantReposRemoved = 0;
   let reposSynced = 0;
   let reposSkipped = 0;
+  const billedTenantIds = new Set<number>();
 
   try {
     const startedAt = new Date().toISOString();
@@ -150,83 +152,9 @@ export async function runSync(env: Env, opts?: RunSyncOptions): Promise<void> {
     await batchChunked(db, repoUpsertStmts);
     console.log(`[sync] upserted ${allRepos.length} repo(s) from tenant discovery`);
 
-    // Prune: delete data for repos absent from the union.
-    // SAFETY GUARD: skip prune if union is empty (already handled above, but be explicit).
     const knownRepos = new Set(allRepos);
-    const CHUNK = 90;
-
-    const [issueRepos, edgeSrcRepos, edgeDstRepos, prStateRepos, syncStateRepos, registryRepos] =
-      await Promise.all([
-        db.prepare("SELECT DISTINCT repo FROM issues").all<{ repo: string }>(),
-        db
-          .prepare("SELECT DISTINCT substr(src_key, 1, instr(src_key,'#')-1) AS repo FROM edges")
-          .all<{ repo: string }>(),
-        db
-          .prepare("SELECT DISTINCT substr(dst_key, 1, instr(dst_key,'#')-1) AS repo FROM edges")
-          .all<{ repo: string }>(),
-        db.prepare("SELECT DISTINCT repo FROM pr_state").all<{ repo: string }>(),
-        db.prepare("SELECT repo FROM sync_state").all<{ repo: string }>(),
-        db.prepare("SELECT repo FROM repos").all<{ repo: string }>(),
-      ]);
-
-    const staleIssueRepos = (issueRepos.results ?? [])
-      .map((r) => r.repo)
-      .filter((r) => !knownRepos.has(r));
-    const staleEdgeRepos = [
-      ...(edgeSrcRepos.results ?? []).map((r) => r.repo),
-      ...(edgeDstRepos.results ?? []).map((r) => r.repo),
-    ].filter((r) => !knownRepos.has(r));
-    const stalePrStateRepos = (prStateRepos.results ?? [])
-      .map((r) => r.repo)
-      .filter((r) => !knownRepos.has(r));
-    const staleSyncStateRepos = (syncStateRepos.results ?? [])
-      .map((r) => r.repo)
-      .filter((r) => !knownRepos.has(r));
-    const staleRegistryRepos = (registryRepos.results ?? [])
-      .map((r) => r.repo)
-      .filter((r) => !knownRepos.has(r));
-
-    const pruneStmts: D1PreparedStatement[] = [];
-    for (let i = 0; i < staleIssueRepos.length; i += CHUNK) {
-      for (const repo of staleIssueRepos.slice(i, i + CHUNK)) {
-        pruneStmts.push(db.prepare("DELETE FROM issues WHERE repo=?").bind(repo));
-      }
-    }
-    const staleEdgeReposUniq = [...new Set(staleEdgeRepos)];
-    for (let i = 0; i < staleEdgeReposUniq.length; i += CHUNK) {
-      for (const repo of staleEdgeReposUniq.slice(i, i + CHUNK)) {
-        pruneStmts.push(
-          db
-            .prepare(
-              "DELETE FROM edges WHERE substr(src_key,1,instr(src_key,'#')-1)=? OR substr(dst_key,1,instr(dst_key,'#')-1)=?",
-            )
-            .bind(repo, repo),
-        );
-      }
-    }
-    for (let i = 0; i < stalePrStateRepos.length; i += CHUNK) {
-      for (const repo of stalePrStateRepos.slice(i, i + CHUNK)) {
-        pruneStmts.push(db.prepare("DELETE FROM pr_state WHERE repo=?").bind(repo));
-      }
-    }
-    for (let i = 0; i < staleSyncStateRepos.length; i += CHUNK) {
-      for (const repo of staleSyncStateRepos.slice(i, i + CHUNK)) {
-        pruneStmts.push(db.prepare("DELETE FROM sync_state WHERE repo=?").bind(repo));
-      }
-    }
-    for (const repo of staleRegistryRepos) {
-      pruneStmts.push(db.prepare("DELETE FROM repos WHERE repo=?").bind(repo));
-    }
-
-    if (pruneStmts.length > 0) {
-      await batchChunked(db, pruneStmts);
-      staleReposPruned = new Set([
-        ...staleIssueRepos,
-        ...staleEdgeReposUniq,
-        ...stalePrStateRepos,
-        ...staleSyncStateRepos,
-        ...staleRegistryRepos,
-      ]).size;
+    staleReposPruned = await pruneStaleRepoData(db, knownRepos);
+    if (staleReposPruned > 0) {
       console.log(`[sync] pruned data for ${staleReposPruned} stale repo(s)`);
     }
 
@@ -266,7 +194,7 @@ export async function runSync(env: Env, opts?: RunSyncOptions): Promise<void> {
       const name = repo.slice(slash + 1);
       // biome-ignore lint/style/noNonNullAssertion: windowedRepos is derived from repoTenantMap keys, so every repo is present.
       const repoTenants = repoTenantMap.get(repo)!;
-      const budgetTenantId = opts?.tenantId;
+      const budgetTenantId = opts?.tenantId ?? repoTenants[0]?.tenantId;
       if (budgetTenantId != null) {
         if (await isSyncBudgetExhausted(db, budgetTenantId)) {
           reposSkipped += 1;
@@ -284,7 +212,7 @@ export async function runSync(env: Env, opts?: RunSyncOptions): Promise<void> {
         const token = await resolveToken();
         // Daily cron = full reconcile (#80): fullSync forces a complete re-fetch
         // (since=null) so deps-only edge changes are healed regardless of updatedAt.
-        stalePrsClosed += await syncRepoBundle(
+        const bundle = await syncRepoBundle(
           db,
           token,
           owner,
@@ -294,10 +222,12 @@ export async function runSync(env: Env, opts?: RunSyncOptions): Promise<void> {
           sealedKeys,
           structureOnly,
         );
-        // Flush this repo's edges immediately — sync_state advances per repo but
-        // the window-level flush used to run only after all repos, so the UI saw
-        // new issues without blocked-by links until the pass finished.
-        await flushEdges(db, edgesForRepo(collectedEdges, repo));
+        stalePrsClosed += bundle.stalePrsClosed;
+        const edgeWrites = await flushEdges(db, edgesForRepo(collectedEdges, repo));
+        if (budgetTenantId != null) {
+          billedTenantIds.add(budgetTenantId);
+          await recordSyncWrites(db, budgetTenantId, bundle.rowsWritten + edgeWrites);
+        }
       } catch (err) {
         if (!(await handleRepoSyncFailure(db, repo, err))) skippedCount++;
       }
@@ -371,6 +301,13 @@ export async function runSync(env: Env, opts?: RunSyncOptions): Promise<void> {
     console.error("[sync] error:", err);
   } finally {
     await releaseSyncLock(db);
+    const quotaTenants = await Promise.all(
+      [...billedTenantIds].map(async (tenantId) => ({
+        tenant_id: tenantId,
+        sync_pages: await getQuotaUsed(db, tenantId, "sync_pages"),
+        sync_writes: await getQuotaUsed(db, tenantId, "sync_writes"),
+      })),
+    );
     await writeRunAudit(env, db, {
       outcome,
       stubs: stubsCount,
@@ -378,6 +315,7 @@ export async function runSync(env: Env, opts?: RunSyncOptions): Promise<void> {
       before,
       reposSynced,
       reposSkipped,
+      quotaTenants,
       corrections: {
         stalePrsClosed,
         staleReposPruned,

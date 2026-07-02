@@ -36,6 +36,16 @@ vi.mock("../auth/installToken", () => ({
   listInstallationRepos: vi.fn(),
 }));
 
+vi.mock("../quota", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../quota")>();
+  return {
+    ...actual,
+    isSyncBudgetExhausted: vi.fn().mockResolvedValue(false),
+    trySpendSyncPage: vi.fn().mockResolvedValue(true),
+    recordSyncWrites: vi.fn().mockResolvedValue(true),
+  };
+});
+
 vi.mock("./repo-probe", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./repo-probe")>();
   return {
