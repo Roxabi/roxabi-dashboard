@@ -1028,7 +1028,7 @@ describe("syncRepoBundle", () => {
     // watermark SELECT never issued when fullSync=true
     expect(db._recorded.find((s) => s.sql.includes("SELECT last_synced_at"))).toBeUndefined();
     // PR #6 (open in D1, absent from GitHub) closed → count returned
-    expect(closed).toBe(1);
+    expect(closed.stalePrsClosed).toBe(1);
   });
 });
 

@@ -9,11 +9,11 @@ const t = en;
 
 <Layout
   lang="en"
-  title="Roxabi Live — Agent & LLM guide"
+  title="Roxabi Live · Agent & LLM guide"
   description="How to structure GitHub issues with /issue-triage and orchestrate coding-agent fleets via the Roxabi Live cockpit."
 >
   <SiteHeader t={t} />
-  <main class="agents-doc">
+  <main class="agents-doc doc-page">
     <div class="container">
       <p class="agents-kicker">For agents & LLMs</p>
       <h1>GitHub + <code>/issue-triage</code> + cockpit</h1>
@@ -26,9 +26,9 @@ const t = en;
       <section>
         <h2>The loop</h2>
         <ol>
-          <li><strong>Triage</strong> — <code>/issue-triage</code>: size, priority, lane, type labels + dependencies.</li>
-          <li><strong>Sync</strong> — webhooks + reconcile → up-to-date graph in the cockpit.</li>
-          <li><strong>Launch</strong> — start only <em>ready</em> issues (no open blockers).</li>
+          <li><strong>Triage</strong>: <code>/issue-triage</code> for size, priority, lane, type labels and dependencies.</li>
+          <li><strong>Sync</strong>: webhooks + reconcile, up-to-date graph in the cockpit.</li>
+          <li><strong>Launch</strong>: start only <em>ready</em> issues (no open blockers).</li>
         </ol>
       </section>
 
@@ -36,17 +36,18 @@ const t = en;
         <h2>Install the skill</h2>
         <pre><code>claude plugin marketplace add Roxabi/roxabi-live
 claude plugin install roxabi-issues</code></pre>
-        <p>Invoke <code>/issue-triage</code> — full reference on <a href="https://github.com/Roxabi/roxabi-live/blob/main/plugins/roxabi-issues/skills/issue-triage/SKILL.md">GitHub</a>.</p>
+        <p>Invoke <code>/issue-triage</code>. Full reference on <a href="https://github.com/Roxabi/roxabi-live/blob/main/plugins/roxabi-issues/skills/issue-triage/SKILL.md">GitHub</a>.</p>
+        <p>See also the <a href="/en/how-it-works">full setup guide</a>.</p>
       </section>
 
       <section>
         <h2>Label vocabulary (cockpit sync)</h2>
         <ul>
-          <li><strong>Lane</strong> — <code>graph:lane/b</code>, <code>graph:lane/a1</code>, …</li>
-          <li><strong>Size</strong> — <code>size:M</code> or <code>XS|S|M|L|XL</code>; canonical tiers <code>S</code>, <code>F-lite</code>, <code>F-full</code></li>
-          <li><strong>Priority</strong> — <code>P0-critical</code>, <code>P1-high</code>, <code>P2-medium</code>, <code>P3-low</code> (issue-triage canonical)</li>
+          <li><strong>Lane</strong>: <code>graph:lane/b</code>, <code>graph:lane/a1</code>, …</li>
+          <li><strong>Size</strong>: <code>size:M</code> or <code>XS|S|M|L|XL</code>; canonical tiers <code>S</code>, <code>F-lite</code>, <code>F-full</code></li>
+          <li><strong>Priority</strong>: <code>P0-critical</code>, <code>P1-high</code>, <code>P2-medium</code>, <code>P3-low</code> (issue-triage canonical)</li>
         </ul>
-        <p>No GitHub Projects V2 required — labels + native relations are enough.</p>
+        <p>No GitHub Projects V2 required. Labels + native relations are enough.</p>
       </section>
 
       <section>
@@ -62,8 +63,8 @@ claude plugin install roxabi-issues</code></pre>
       <section>
         <h2>Machine-readable resources</h2>
         <ul class="agents-links">
-          <li><a href="/llms.txt"><code>llms.txt</code></a> — compact index for LLM crawlers</li>
-          <li><a href="https://github.com/Roxabi/roxabi-live/blob/main/docs/agent-workflow.md">agent-workflow.md</a> — detailed guide</li>
+          <li><a href="/llms.txt"><code>llms.txt</code></a>: compact index for LLM crawlers</li>
+          <li><a href="https://github.com/Roxabi/roxabi-live/blob/main/docs/agent-workflow.md">agent-workflow.md</a>: detailed guide</li>
           <li><a href="https://github.com/Roxabi/roxabi-live/blob/main/docs/ARCHITECTURE.md">ARCHITECTURE.md</a></li>
         </ul>
       </section>
@@ -78,9 +79,6 @@ claude plugin install roxabi-issues</code></pre>
 </Layout>
 
 <style>
-  .agents-doc {
-    padding: 48px 0 96px;
-  }
   .agents-kicker {
     font-size: 12px;
     font-weight: 600;

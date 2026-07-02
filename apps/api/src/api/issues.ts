@@ -12,6 +12,13 @@ import type { Context } from "hono";
 import { resolveVisibleRepos } from "../auth/repoAccess";
 import type { AuthEnv } from "../auth/types";
 import { loadZkSealedIssueKeysForUser, redactIssueTitle } from "../auth/zk";
+import { getTenantPlan } from "../quota";
+import {
+  graphQuotaDeniedResponse,
+  recordGraphRowsSpend,
+  reserveGraphRowsBudget,
+  sumRowsRead,
+} from "../quota/read-budget";
 
 const ISSUE_KEY_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+#[0-9]+$/;
 
@@ -52,6 +59,7 @@ async function sealedKeysForSession(c: Context<AuthEnv>): Promise<Set<string>> {
 
 export const listIssuesRoute = async (c: Context<AuthEnv>) => {
   const sealedKeys = await sealedKeysForSession(c);
+  const session = c.get("session");
 
   const visible = await resolveVisibleRepos(c);
 
@@ -76,6 +84,14 @@ export const listIssuesRoute = async (c: Context<AuthEnv>) => {
 
   if (visible.length === 0) {
     return c.json({ issues: [], total: 0, limit, offset });
+  }
+
+  let tenantPlan: Awaited<ReturnType<typeof getTenantPlan>> | undefined;
+  if (session?.tenantId) {
+    tenantPlan = await getTenantPlan(c.env.DB, session.tenantId);
+    if (!(await reserveGraphRowsBudget(c.env.DB, session.tenantId, tenantPlan))) {
+      return graphQuotaDeniedResponse(c);
+    }
   }
 
   const ph = visible.map(() => "?").join(",");
@@ -108,6 +124,7 @@ export const listIssuesRoute = async (c: Context<AuthEnv>) => {
     c.env.DB.prepare(countSql).bind(...params),
     c.env.DB.prepare(dataSql).bind(...params, limit, offset),
   ]);
+  let rowsRead = sumRowsRead([countResult, dataResult]);
 
   const total = (countResult.results[0] as CountRow | undefined)?.n ?? 0;
   const rows = dataResult.results as IssueListRow[];
@@ -122,6 +139,7 @@ export const listIssuesRoute = async (c: Context<AuthEnv>) => {
     )
       .bind(...keys)
       .all<LabelRow>();
+    rowsRead += lblResult.meta?.rows_read ?? 0;
     for (const lr of lblResult.results) {
       const existing = labelsByKey.get(lr.issue_key);
       if (existing) {
@@ -129,6 +147,12 @@ export const listIssuesRoute = async (c: Context<AuthEnv>) => {
       } else {
         labelsByKey.set(lr.issue_key, [lr.name]);
       }
+    }
+  }
+
+  if (session?.tenantId && tenantPlan) {
+    if (!(await recordGraphRowsSpend(c.env.DB, session.tenantId, rowsRead, tenantPlan))) {
+      return graphQuotaDeniedResponse(c);
     }
   }
 
@@ -152,6 +176,7 @@ export const listIssuesRoute = async (c: Context<AuthEnv>) => {
 
 export const getIssueRoute = async (c: Context<AuthEnv>) => {
   const sealedKeys = await sealedKeysForSession(c);
+  const session = c.get("session");
 
   const visible = await resolveVisibleRepos(c);
 
@@ -168,6 +193,14 @@ export const getIssueRoute = async (c: Context<AuthEnv>) => {
   }
 
   const ph = visible.map(() => "?").join(",");
+
+  let tenantPlan: Awaited<ReturnType<typeof getTenantPlan>> | undefined;
+  if (session?.tenantId) {
+    tenantPlan = await getTenantPlan(c.env.DB, session.tenantId);
+    if (!(await reserveGraphRowsBudget(c.env.DB, session.tenantId, tenantPlan))) {
+      return graphQuotaDeniedResponse(c);
+    }
+  }
 
   const issueSql = `SELECT key, repo, number, JSON_EXTRACT(payload,'$.title') AS title, state, url, milestone, is_stub, created_at, updated_at, closed_at FROM issues WHERE key = ? AND repo IN (${ph})`;
   const row = await c.env.DB.prepare(issueSql)
@@ -213,6 +246,13 @@ export const getIssueRoute = async (c: Context<AuthEnv>) => {
     number: e.number,
     repo: e.repo,
   }));
+
+  if (session?.tenantId && tenantPlan) {
+    const rowsRead = 1 + sumRowsRead([labelsResult, blockingResult, blockedByResult]);
+    if (!(await recordGraphRowsSpend(c.env.DB, session.tenantId, rowsRead, tenantPlan))) {
+      return graphQuotaDeniedResponse(c);
+    }
+  }
 
   return c.json({
     key: row.key,

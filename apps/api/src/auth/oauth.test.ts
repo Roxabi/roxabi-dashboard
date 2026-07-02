@@ -1369,7 +1369,9 @@ describe("callbackRoute", () => {
             });
           if (n === 1) return json({ access_token: "tok" });
           if (n === 2) return json({ id: 42, login: "alice" });
-          return json({ installations: [{ id: 9, account: { login: "Roxabi", type: "Organization" } }] });
+          return json({
+            installations: [{ id: 9, account: { login: "Roxabi", type: "Organization" } }],
+          });
         }),
       );
     }
@@ -1390,7 +1392,11 @@ describe("callbackRoute", () => {
       const captured: FakeStmt[] = [];
       const db = makeAutoHandoffDb(captured, true);
       stubGithub();
-      const env = { ...makeEnv(db), ZK_ACCOUNT_KEY: "1", INSTALL_TOKEN_KEY: dek() } as unknown as Env;
+      const env = {
+        ...makeEnv(db),
+        ZK_ACCOUNT_KEY: "1",
+        INSTALL_TOKEN_KEY: dek(),
+      } as unknown as Env;
       await run(env, "a".repeat(32));
       expect(captured.some((s) => s.sql.toLowerCase().includes("user_token_handoffs"))).toBe(true);
     });
@@ -1399,7 +1405,11 @@ describe("callbackRoute", () => {
       const captured: FakeStmt[] = [];
       const db = makeAutoHandoffDb(captured, false);
       stubGithub();
-      const env = { ...makeEnv(db), ZK_ACCOUNT_KEY: "1", INSTALL_TOKEN_KEY: dek() } as unknown as Env;
+      const env = {
+        ...makeEnv(db),
+        ZK_ACCOUNT_KEY: "1",
+        INSTALL_TOKEN_KEY: dek(),
+      } as unknown as Env;
       await run(env, "b".repeat(32));
       expect(captured.some((s) => s.sql.toLowerCase().includes("zk_key_backups"))).toBe(true);
       expect(captured.some((s) => s.sql.toLowerCase().includes("user_token_handoffs"))).toBe(false);
@@ -1419,7 +1429,11 @@ describe("callbackRoute", () => {
       const captured: FakeStmt[] = [];
       const db = makeAutoHandoffDb(captured, true, 1); // enrolled, but reauth=1
       stubGithub();
-      const env = { ...makeEnv(db), ZK_ACCOUNT_KEY: "1", INSTALL_TOKEN_KEY: dek() } as unknown as Env;
+      const env = {
+        ...makeEnv(db),
+        ZK_ACCOUNT_KEY: "1",
+        INSTALL_TOKEN_KEY: dek(),
+      } as unknown as Env;
       await run(env, "e".repeat(32));
       // The !wantsReauth guard must short-circuit before the enrolled-check.
       expect(captured.some((s) => s.sql.toLowerCase().includes("zk_key_backups"))).toBe(false);

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.23.0](https://github.com/Roxabi/roxabi-live/compare/roxabi-live/v0.22.3...roxabi-live/v0.23.0) (2026-07-02)
+
+
+### Added
+
+* **api:** per-tenant daily quotas and read-path hardening ([#296](https://github.com/Roxabi/roxabi-live/pull/296))
+* **api:** quota follow-up — sync_writes, cron budget, WAF IaC ([#296](https://github.com/Roxabi/roxabi-live/pull/296))
+* **marketing:** setup guide pages, hero dependency graph, official agent icons ([#298](https://github.com/Roxabi/roxabi-live/pull/298))
+
+
+### Fixed
+
+* **api:** address PR #296 review findings ([#296](https://github.com/Roxabi/roxabi-live/pull/296))
+* **infra:** align WAF `/health` rule with Cloudflare free-tier API constraints
+
+
 ## [0.22.3](https://github.com/Roxabi/roxabi-live/compare/roxabi-live/v0.22.2...roxabi-live/v0.22.3) (2026-07-02)
 
 

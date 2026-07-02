@@ -19,3 +19,5 @@ export const BOOTSTRAP_WINDOW = 1;
  * (watch the subreq budget) or migrate to the dormant Queues fan-out (wrangler.toml).
  */
 export const NUM_SLOTS = 2;
+/** Cap GraphQL repo probes per discovery pass (#295 — kills quadratic bootstrap). */
+export const MAX_DISCOVERY_PROBES_PER_PASS = 10;

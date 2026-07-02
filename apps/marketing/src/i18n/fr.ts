@@ -1,14 +1,13 @@
 export const fr = {
   // ── Meta ──────────────────────────────────────────────────────────────────
-  siteTitle: "Roxabi Live — Le poste de pilotage de votre flotte d'agents",
+  siteTitle: "Roxabi Live · Le poste de pilotage de votre flotte d'agents",
   siteDescription:
     "Lancez dix agents à la fois, sans qu'ils se marchent dessus. Roxabi Live lit vos issues GitHub et leurs liens blocked-by pour révéler ce que vous pouvez lancer en parallèle.",
 
   // ── Header ────────────────────────────────────────────────────────────────
   header: {
-    navComment:   "Commentaires",
-    navAdmin:     "Admin",
-    navCommentHref: "https://github.com/Roxabi/roxabi-live/issues/new/choose",
+    navSetup:     "Comment ça marche",
+    navSetupHref: "/comment-ca-marche",
     loginLabel:   "Connexion",
   },
 
@@ -18,11 +17,11 @@ export const fr = {
     eyebrowRight: "GitHub natif",
     h1Part1:      "Lancez dix agents à la fois.",
     h1Accent:     "Sans qu'ils se marchent dessus.",
-    lead:         "Le goulot d'étranglement d'une flotte d'agents, ce n'est plus l'écriture du code — c'est la concurrence. Roxabi Live lit vos issues GitHub et leurs liens blocked-by pour révéler, d'un coup d'œil, ce que vous pouvez lancer en parallèle.",
+    lead:         "Le goulot d'étranglement d'une flotte d'agents, ce n'est plus l'écriture du code, c'est la concurrence. Roxabi Live lit vos issues GitHub et leurs liens blocked-by pour révéler, d'un coup d'œil, ce que vous pouvez lancer en parallèle.",
     ctaPrimary:   "Se connecter",
-    ctaGhost:     "Voir la démo",
+    ctaGhost:     "Comment ça marche",
     note:         "GitHub Issues natif · aucun outil tiers · zéro friction d'adoption",
-    boardTitle:   "roxabi-live · tableau de bord",
+    boardTitle:   "roxabi-live · graphe de dépendances",
     boardLive:    "live",
     legendReady:   "ready",
     legendRunning: "running",
@@ -60,7 +59,7 @@ export const fr = {
   method: {
     kicker:  "La méthode",
     h2:      "GitHub Issues comme système nerveux de votre flotte.",
-    lead:    "Pas d'outil supplémentaire. Roxabi Live s'appuie sur ce que vous faites déjà — issues, labels, dépendances — pour calculer en temps réel ce qui peut avancer.",
+    lead:    "Pas d'outil supplémentaire. Roxabi Live s'appuie sur ce que vous faites déjà (issues, labels, dépendances) pour calculer en temps réel ce qui peut avancer.",
     steps: [
       {
         num:   "Étape 01",
@@ -89,7 +88,7 @@ export const fr = {
   // ── Paradigm ──────────────────────────────────────────────────────────────
   paradigm: {
     kicker:    "Le changement de paradigme",
-    headline:  "Ce n'est plus vous qui orchestrez — c'est le graphe.",
+    headline:  "Ce n'est plus vous qui orchestrez, c'est le graphe.",
     body:      "Jusqu'ici, coordonner des agents demandait une attention manuelle permanente : qui peut commencer ? qui attend quoi ? Roxabi Live automatise cette décision à partir de vos issues et de leurs dépendances GitHub natives.",
     oldLabel:  "Avant",
     oldText:   "Coordination manuelle, tableurs, Slack, risque d'oubli permanent",
@@ -103,7 +102,7 @@ export const fr = {
   github: {
     kicker: "GitHub natif, zéro friction",
     h2:     "Votre source de vérité reste GitHub.",
-    p1:     "Roxabi Live ne remplace pas votre workflow — il l'augmente. Issues, labels, sub-issues, blocked-by : tout reste dans GitHub, là où vos agents lisent et écrivent déjà.",
+    p1:     "Roxabi Live ne remplace pas votre workflow, il l'augmente. Issues, labels, sub-issues, blocked-by : tout reste dans GitHub, là où vos agents lisent et écrivent déjà.",
     p2:     "Pas de migration. Pas de double saisie. Pas d'outil tiers à apprendre.",
     trust: [
       {
@@ -154,7 +153,7 @@ export const fr = {
     h2Accent:    "sans collision ?",
     body:        "Rejoignez les équipes qui orchestrent leurs agents Claude avec des graphes de dépendances GitHub, en temps réel.",
     ctaPrimary:  "Se connecter",
-    ctaGhost:    "Voir la démo",
+    ctaGhost:    "Comment ça marche",
     reassurance: "GitHub Issues natif · aucune carte requise · zéro friction d'adoption",
   },
 
@@ -162,11 +161,10 @@ export const fr = {
   footer: {
     logoWordmark: "Live",
     links: [
-      { label: "Guide agents", href: "/for-agents" },
-      { label: "llms.txt",     href: "/llms.txt" },
-      { label: "Commentaires", href: "https://github.com/Roxabi/roxabi-live/issues/new/choose" },
-      { label: "Admin",        href: "https://app.live.roxabi.dev/admin", appPath: "/admin" },
-      { label: "GitHub",       href: "https://github.com/Roxabi/roxabi-live" },
+      { label: "Comment ça marche", href: "/comment-ca-marche" },
+      { label: "Guide agents",      href: "/for-agents" },
+      { label: "llms.txt",          href: "/llms.txt" },
+      { label: "GitHub",            href: "https://github.com/Roxabi/roxabi-live" },
     ],
     copy: "© 2026 Roxabi",
   },

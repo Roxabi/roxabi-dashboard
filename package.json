@@ -22,6 +22,7 @@
     "migrate:pages-model": "node scripts/migrate-to-pages-model.mjs",
     "setup:live-domains": "node scripts/setup-live-domains.mjs",
     "verify:cloudflare": "node scripts/verify-cloudflare.mjs",
+    "setup:waf-rules": "node scripts/setup-waf-rules.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

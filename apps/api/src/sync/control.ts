@@ -14,13 +14,18 @@ export async function batchChunked(
   db: D1Database,
   stmts: D1PreparedStatement[],
   size = 900,
-): Promise<void> {
+): Promise<number> {
+  let rowsWritten = 0;
   for (let i = 0; i < stmts.length; i += size) {
     const chunk = stmts.slice(i, i + size);
     if (chunk.length > 0) {
-      await db.batch(chunk);
+      const results = await db.batch(chunk);
+      for (const result of results) {
+        rowsWritten += result.meta?.rows_written ?? 0;
+      }
     }
   }
+  return rowsWritten;
 }
 
 // ---------------------------------------------------------------------------

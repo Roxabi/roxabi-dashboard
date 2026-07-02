@@ -5,6 +5,7 @@
 
 import { getInstallationToken, listInstallationRepos } from "../auth/installToken";
 import type { Env } from "../types";
+import { MAX_DISCOVERY_PROBES_PER_PASS } from "./constants";
 import { acquireSyncLock, batchChunked, incrementAuthFailures, releaseSyncLock } from "./control";
 import { filterResolvableRepos } from "./repo-probe";
 
@@ -31,8 +32,16 @@ async function filterListedRepos(
   const trusted = listed.filter((r) => synced.has(r.repo));
   const needsProbe = listed.filter((r) => !synced.has(r.repo));
   if (needsProbe.length === 0) return trusted;
-  const { kept } = await filterResolvableRepos(token, needsProbe);
-  return [...trusted, ...kept];
+  const capped = needsProbe.slice(0, MAX_DISCOVERY_PROBES_PER_PASS);
+  const deferred = needsProbe.slice(MAX_DISCOVERY_PROBES_PER_PASS);
+  if (deferred.length > 0) {
+    console.log(
+      `[sync] discovery probe cap: ${capped.length}/${needsProbe.length} probed this pass, ${deferred.length} deferred`,
+    );
+  }
+  const { kept } = await filterResolvableRepos(token, capped);
+  // Deferred repos stay on the installation list — probe them on a later pass.
+  return [...trusted, ...kept, ...deferred];
 }
 
 /**

@@ -94,7 +94,11 @@ describe("GET /api/sync/status", () => {
       expect.anything(),
       expect.anything(),
       expect.anything(),
-      { userId: STUB_SESSION.userId, zkAccountKeyEnabled: true },
+      {
+        userId: STUB_SESSION.userId,
+        tenantId: STUB_SESSION.tenantId,
+        zkAccountKeyEnabled: true,
+      },
     );
     expect(isGlobalSyncRunning).toHaveBeenCalled();
   });

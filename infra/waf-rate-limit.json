@@ -1,0 +1,17 @@
+{
+  "description": "Rate-limit unauthenticated GET /health probes (#295 S3)",
+  "phase": "http_ratelimit",
+  "rules": [
+    {
+      "description": "Block abusive /health polling per source IP",
+      "expression": "(http.request.uri.path eq \"/health\")",
+      "action": "block",
+      "ratelimit": {
+        "characteristics": ["ip.src", "cf.colo.id"],
+        "period": 10,
+        "requests_per_period": 30,
+        "mitigation_timeout": 10
+      }
+    }
+  ]
+}

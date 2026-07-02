@@ -1,15 +1,173 @@
 ---
 import type { Translations } from "../i18n/index";
-import { BOARD } from "../i18n/index";
+import { GRAPH_NODES, GRAPH_EDGES } from "../i18n/index";
 
 interface Props {
   t: Translations;
 }
 const { t } = Astro.props;
+
+const NODE_H = 38;
+const ARROW_INSET = 5;
+
+type NodeLike = { x: number; y: number; w: number };
+type Rect = {
+  cx: number;
+  cy: number;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
+function nodeRect(node: NodeLike): Rect {
+  return {
+    cx: node.x,
+    cy: node.y + NODE_H / 2,
+    left: node.x - node.w / 2,
+    right: node.x + node.w / 2,
+    top: node.y,
+    bottom: node.y + NODE_H,
+  };
+}
+
+type Point = { x: number; y: number };
+type EdgeDir = "down" | "up" | "right" | "left";
+
+/** Cubic curve with tangents perpendicular to node edges at start/end */
+function curvedPath(
+  start: Point,
+  end: Point,
+  exitDir: EdgeDir,
+  enterDir: EdgeDir,
+  lane = 0,
+): string {
+  const dist = Math.hypot(end.x - start.x, end.y - start.y);
+  const tension = Math.max(16, Math.min(dist * 0.42, 52));
+
+  const cp1 = { ...start };
+  const cp2 = { ...end };
+
+  switch (exitDir) {
+    case "down":
+      cp1.x += lane * 4;
+      cp1.y += tension;
+      break;
+    case "up":
+      cp1.x += lane * 4;
+      cp1.y -= tension;
+      break;
+    case "right":
+      cp1.x += tension;
+      cp1.y += lane * 4;
+      break;
+    case "left":
+      cp1.x -= tension;
+      cp1.y += lane * 4;
+      break;
+  }
+
+  switch (enterDir) {
+    case "down":
+      cp2.x += lane * 3;
+      cp2.y = end.y - tension;
+      break;
+    case "up":
+      cp2.x += lane * 3;
+      cp2.y = end.y + tension;
+      break;
+    case "right":
+      cp2.x = end.x - tension;
+      cp2.y += lane * 3;
+      break;
+    case "left":
+      cp2.x = end.x + tension;
+      cp2.y += lane * 3;
+      break;
+  }
+
+  return `M ${start.x} ${start.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${end.x} ${end.y}`;
+}
+
+/** blocked-by: anchored on edges, curved, 90° at both ends */
+function blockedByPath(from: Rect, to: Rect): string {
+  return curvedPath(
+    { x: from.cx, y: from.bottom },
+    { x: to.cx, y: to.top - ARROW_INSET },
+    "down",
+    "down",
+  );
+}
+
+/** parent: anchored on edges, curved, 90° departure and arrival */
+function parentPath(from: Rect, to: Rect, lane: number): string {
+  const dy = to.top - from.bottom;
+  const dx = to.cx - from.cx;
+
+  if (dy > 2) {
+    return curvedPath(
+      { x: from.cx, y: from.bottom },
+      { x: to.cx, y: to.top - ARROW_INSET },
+      "down",
+      "down",
+      lane,
+    );
+  }
+
+  if (dy < -2) {
+    return curvedPath(
+      { x: from.cx, y: from.top },
+      { x: to.cx, y: to.bottom + ARROW_INSET },
+      "up",
+      "up",
+      lane,
+    );
+  }
+
+  if (dx >= 0) {
+    return curvedPath(
+      { x: from.right, y: from.cy },
+      { x: to.left - ARROW_INSET, y: to.cy },
+      "right",
+      "left",
+      lane,
+    );
+  }
+
+  return curvedPath(
+    { x: from.left, y: from.cy },
+    { x: to.right + ARROW_INSET, y: to.cy },
+    "left",
+    "right",
+    lane,
+  );
+}
+
+const nodeMap = Object.fromEntries(GRAPH_NODES.map((n) => [n.id, n]));
+
+const parentLaneByEdge = (() => {
+  const lanes = new Map<string, number>();
+  const grouped = new Map<string, typeof GRAPH_EDGES[number][]>();
+  for (const edge of GRAPH_EDGES) {
+    if (edge.type !== "parent") continue;
+    const key = edge.from;
+    const list = grouped.get(key) ?? [];
+    list.push(edge);
+    grouped.set(key, list);
+  }
+  for (const [, edges] of grouped) {
+    edges
+      .slice()
+      .sort((a, b) => (nodeMap[a.to]?.x ?? 0) - (nodeMap[b.to]?.x ?? 0))
+      .forEach((edge, index) => {
+        lanes.set(`${edge.from}->${edge.to}`, index - (edges.length - 1) / 2);
+      });
+  }
+  return lanes;
+})();
 ---
 
 <div class="launch-board" role="img" aria-label={t.hero.boardTitle}>
-  <!-- chrome bar -->
   <div class="board-chrome">
     <span class="chrome-dots" aria-hidden="true">
       <span class="chrome-dot"></span>
@@ -23,41 +181,61 @@ const { t } = Astro.props;
     </span>
   </div>
 
-  <!-- columns -->
-  <div class="board-columns">
-    {BOARD.map((col) => (
-      <div class="board-col">
-        <div class="col-header">
-          <span class="col-name">{col.repo}</span>
-          <span class="col-count">{col.count}</span>
-        </div>
+  <div class="graph-canvas">
+    <svg
+      class="graph-svg"
+      viewBox="0 0 400 290"
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden="true"
+    >
+      <defs>
+        <marker id="arrow-blocked" markerUnits="userSpaceOnUse" markerWidth="6" markerHeight="6" refX="0" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="var(--blocked)" opacity="0.85" />
+        </marker>
+        <marker id="arrow-parent" markerUnits="userSpaceOnUse" markerWidth="5" markerHeight="5" refX="0" refY="2.5" orient="auto">
+          <path d="M0,0 L5,2.5 L0,5 Z" fill="var(--text-dim)" opacity="0.55" />
+        </marker>
+      </defs>
 
-        {col.issues.map((issue) => (
-          <div class={`issue-card is-${issue.status}`}>
-            <div class="issue-meta">
-              <span class="issue-num">{issue.num}</span>
-              <span class={`status-badge status-${issue.status}`}>{issue.status}</span>
-            </div>
-            <div class="issue-title">{issue.title}</div>
-            {issue.status === "blocked" && "blockedBy" in issue && (
-              <div class="issue-blocker">blocked-by {issue.blockedBy}</div>
-            )}
-            {issue.status === "running" && "agent" in issue && (
-              <div class="issue-agent">
-                <span class="agent-avatar">{issue.agent}</span>
-                <span class="agent-label">{issue.agentLabel}</span>
-              </div>
-            )}
-            {issue.status === "running" && (
-              <div class="card-running-bar" aria-hidden="true"></div>
-            )}
-          </div>
-        ))}
-      </div>
-    ))}
+      {GRAPH_EDGES.map((edge) => {
+        const fromNode = nodeMap[edge.from];
+        const toNode = nodeMap[edge.to];
+        if (!fromNode || !toNode) return null;
+        const from = nodeRect(fromNode);
+        const to = nodeRect(toNode);
+        const isBlocked = edge.type === "blocked-by";
+        const lane = parentLaneByEdge.get(`${edge.from}->${edge.to}`) ?? 0;
+        const d = isBlocked ? blockedByPath(from, to) : parentPath(from, to, lane);
+        return (
+          <path
+            class={`graph-edge ${isBlocked ? "is-blocked" : "is-parent"}`}
+            d={d}
+            fill="none"
+            stroke-linejoin="round"
+            marker-end={isBlocked ? "url(#arrow-blocked)" : "url(#arrow-parent)"}
+          />
+        );
+      })}
+
+      {GRAPH_NODES.map((node) => (
+        <g class={`graph-node is-${node.status}`} transform={`translate(${node.x - node.w / 2}, ${node.y})`}>
+          <rect
+            class="node-bg"
+            width={node.w}
+            height={NODE_H}
+            rx="6"
+          />
+          <text class="node-num" x="8" y="13">{node.num}</text>
+          <text class="node-status" x={node.w - 8} y="13" text-anchor="end">{node.status}</text>
+          <text class="node-title" x="8" y="28">{node.title}</text>
+          {node.status === "running" && (
+            <rect class="node-running-bar" width={node.w} height="2" y={NODE_H - 2} rx="0 0 6 6" />
+          )}
+        </g>
+      ))}
+    </svg>
   </div>
 
-  <!-- footer -->
   <div class="board-footer">
     <div class="board-legend" aria-hidden="true">
       <span class="legend-item">
@@ -73,8 +251,8 @@ const { t } = Astro.props;
         {t.hero.legendBlocked}
       </span>
       <span class="legend-item">
-        <span class="legend-dot" style="background:var(--done)"></span>
-        {t.hero.legendDone}
+        <span class="legend-dot" style="background:var(--accent)"></span>
+        epic
       </span>
     </div>
     <span class="board-launch-count">{t.hero.launchCount}</span>

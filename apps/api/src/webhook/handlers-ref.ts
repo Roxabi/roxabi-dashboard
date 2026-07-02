@@ -7,6 +7,14 @@
  */
 
 import { resolveInstallToken } from "../auth/installToken";
+import {
+  type TenantPlan,
+  getQuotaUsed,
+  limitForMetric,
+  markRepoDirty,
+  shouldRunBranchRescan,
+  spendQuota,
+} from "../quota";
 import { BRANCH_ISSUE_RE, syncBranches } from "../sync/sync";
 import type { Env } from "../types";
 import { renameMilestone, setActiveBranch, upsertPrState } from "./mutations";
@@ -21,9 +29,9 @@ import { renameMilestone, setActiveBranch, upsertPrState } from "./mutations";
 export async function handleRefCreate(
   payload: Record<string, unknown>,
   db: D1Database,
-): Promise<void> {
+): Promise<boolean> {
   if (payload.ref_type !== "branch") {
-    return;
+    return false;
   }
   const ref = (payload.ref as string | undefined) ?? "";
   const repo = (payload.repository as Record<string, unknown> | undefined)?.full_name as
@@ -32,10 +40,11 @@ export async function handleRefCreate(
   const repoStr = repo ?? "";
   const m = BRANCH_ISSUE_RE.exec(ref);
   if (!m) {
-    return;
+    return false;
   }
   const number = Number.parseInt(m[1], 10);
   await setActiveBranch(db, repoStr, number, 1).run();
+  return true;
 }
 
 /**
@@ -50,9 +59,10 @@ export async function handleRefDelete(
   payload: Record<string, unknown>,
   db: D1Database,
   env: Env,
-): Promise<void> {
+  quota?: { tenantId: number; plan: TenantPlan },
+): Promise<boolean> {
   if (payload.ref_type !== "branch") {
-    return;
+    return false;
   }
   const ref = (payload.ref as string | undefined) ?? "";
   const repoFull = (payload.repository as Record<string, unknown> | undefined)?.full_name as
@@ -62,7 +72,7 @@ export async function handleRefDelete(
 
   const m = BRANCH_ISSUE_RE.exec(ref);
   if (!m) {
-    return;
+    return false;
   }
 
   const slashIdx = repo.indexOf("/");
@@ -70,19 +80,38 @@ export async function handleRefDelete(
     console.warn(
       `[webhook] handle_ref_delete: malformed repo=${JSON.stringify(repo)} ref=${ref} — skipping syncBranches`,
     );
-    return;
+    return false;
   }
   const owner = repo.slice(0, slashIdx);
   const name = repo.slice(slashIdx + 1);
 
+  if (!(await shouldRunBranchRescan(db, repo))) {
+    return false;
+  }
+
+  if (quota) {
+    const used = await getQuotaUsed(db, quota.tenantId, "gh_fetches");
+    const limit = limitForMetric(quota.plan, "gh_fetches");
+    if (used >= limit) {
+      await markRepoDirty(db, repo);
+      return false;
+    }
+  }
+
   try {
     const token = await resolveInstallToken(db, env, owner, name);
     await syncBranches(db, token, owner, name);
+    if (quota) {
+      await spendQuota(db, quota.tenantId, "gh_fetches", 1, quota.plan, true);
+    }
+    return true;
   } catch (err) {
     console.error(
       `[webhook] handle_ref_delete: token resolution or branch sync failed for repo=${repo} ref=${ref}`,
       err,
     );
+    await markRepoDirty(db, repo);
+    return false;
   }
 }
 
@@ -102,7 +131,7 @@ export async function handleRefDelete(
 export async function handlePullRequest(
   payload: Record<string, unknown>,
   db: D1Database,
-): Promise<void> {
+): Promise<boolean> {
   const pr = (payload.pull_request as Record<string, unknown> | undefined) ?? {};
   const repo = (payload.repository as Record<string, unknown> | undefined)?.full_name as
     | string
@@ -113,7 +142,7 @@ export async function handlePullRequest(
     console.warn(
       `[webhook] pull_request webhook missing PR number; payload keys: ${Object.keys(pr).join(",")}`,
     );
-    return;
+    return false;
   }
 
   const rawState = String(pr.state ?? "open");
@@ -148,6 +177,7 @@ export async function handlePullRequest(
     closingIssueKeysJson,
     updatedAt,
   ).run();
+  return true;
 }
 
 /**
@@ -159,15 +189,15 @@ export async function handlePullRequest(
 export async function handleMilestone(
   payload: Record<string, unknown>,
   db: D1Database,
-): Promise<void> {
+): Promise<boolean> {
   const action = payload.action as string | undefined;
   if (action !== "edited") {
-    return;
+    return false;
   }
   const changes = (payload.changes as Record<string, unknown> | undefined) ?? {};
   const titleChange = changes.title as Record<string, unknown> | undefined;
   if (!titleChange) {
-    return;
+    return false;
   }
   const oldTitle = String(titleChange.from);
   const newTitle = String(
@@ -179,4 +209,5 @@ export async function handleMilestone(
       | undefined) ?? "",
   );
   await renameMilestone(db, repo, oldTitle, newTitle).run();
+  return true;
 }

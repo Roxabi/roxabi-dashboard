@@ -22,6 +22,9 @@ async function main() {
   runWithBwEnv(ROOT, BUILDS_ENV, "scripts/verify-cloudflare-workers.mjs");
 
   console.log("\nCloudflare git-connected deploy looks healthy (Pages + API Workers Builds).");
+  console.log(
+    "\nWAF: apply /health rate limit with `bun run setup:waf-rules` (see infra/waf-rate-limit.json).",
+  );
 }
 
 main().catch((err) => {
