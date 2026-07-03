@@ -7,12 +7,24 @@
 
 import { apiFetchConditional } from "@/lib/api";
 import { getVersionEtag, setVersionEtag } from "@/lib/etag-cache";
-import { applyGraphDelta, GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
+import { applyGraphDelta, fetchGraph, GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
 import type { VersionResponse } from "@roxabi-live/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
 const VERSION_POLL_MS = 15_000;
+
+function graphIsReady(client: ReturnType<typeof useQueryClient>): boolean {
+  return client.getQueryState(GRAPH_QUERY_KEY)?.status === "success";
+}
+
+/** Deduped graph refetch — never use invalidateQueries (storm of parallel full scans). */
+async function refetchGraphOnce(client: ReturnType<typeof useQueryClient>): Promise<void> {
+  await client.fetchQuery({
+    queryKey: GRAPH_QUERY_KEY,
+    queryFn: ({ client: qc }) => fetchGraph(qc),
+  });
+}
 
 export function useVersionPoll(): void {
   const queryClient = useQueryClient();
@@ -39,15 +51,21 @@ export function useVersionPoll(): void {
       lastSeen.current = version;
       return;
     }
-    if (lastSeen.current !== version) {
-      void (async () => {
-        const outcome = await applyGraphDelta(queryClient);
-        if (outcome === "applied" || outcome === "noop") {
-          lastSeen.current = version;
-        } else {
-          void queryClient.invalidateQueries({ queryKey: GRAPH_QUERY_KEY });
-        }
-      })();
-    }
+    if (lastSeen.current === version) return;
+    if (!graphIsReady(queryClient)) return;
+
+    void (async () => {
+      const outcome = await applyGraphDelta(queryClient);
+      if (outcome === "applied" || outcome === "noop") {
+        lastSeen.current = version;
+        return;
+      }
+      try {
+        await refetchGraphOnce(queryClient);
+        lastSeen.current = version;
+      } catch {
+        /* quota or network — keep lastSeen stale so we retry on next bump */
+      }
+    })();
   }, [data?.version, queryClient]);
 }

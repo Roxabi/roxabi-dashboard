@@ -36,6 +36,8 @@ export function useDecryptedGraph() {
   const query = useQuery({
     queryKey: GRAPH_QUERY_KEY,
     queryFn: ({ client }) => fetchGraph(client),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
   const data = query.data;
 
