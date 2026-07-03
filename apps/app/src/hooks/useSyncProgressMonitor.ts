@@ -76,7 +76,8 @@ export function useSyncProgressMonitor(): SyncStatus | null {
       }
     }
     if (wasActive.current && !active) {
-      void applyGraphUpdate(true);
+      // Sync just finished — delta only; a full scan here burns ~125k graph_rows.
+      void applyGraphUpdate(false);
     }
     wasActive.current = active;
   }, [data, queryClient]);
