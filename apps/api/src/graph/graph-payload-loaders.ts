@@ -104,18 +104,33 @@ export function issueRowToNode(
   };
 }
 
+function repoFromIssueKey(key: string): string | null {
+  const hash = key.lastIndexOf("#");
+  return hash > 0 ? key.slice(0, hash) : null;
+}
+
 export async function loadOpenPrsByIssue(
   db: D1Database,
   visible: string[],
+  issueKeys?: string[],
 ): Promise<{ map: Map<string, PrInfo[]>; rowsRead: number }> {
-  const ph = visible.map(() => "?").join(",");
+  const visibleSet = new Set(visible);
+  const repos =
+    issueKeys && issueKeys.length > 0
+      ? [...new Set(issueKeys.map(repoFromIssueKey).filter((r): r is string => r != null && visibleSet.has(r)))]
+      : visible;
+  if (repos.length === 0) return { map: new Map(), rowsRead: 0 };
+
+  const ph = repos.map(() => "?").join(",");
   const prRows = await db
     .prepare(
       `SELECT closing_issue_keys, has_reviewed_label FROM pr_state WHERE state = 'open' AND repo IN (${ph})`,
     )
-    .bind(...visible)
+    .bind(...repos)
     .all<PrStateRow>();
   let rowsRead = prRows.meta?.rows_read ?? 0;
+  const keyFilter =
+    issueKeys && issueKeys.length > 0 ? new Set(issueKeys) : null;
   const openPrsByIssue = new Map<string, PrInfo[]>();
   for (const row of prRows.results) {
     if (!row.closing_issue_keys) continue;
@@ -127,6 +142,7 @@ export async function loadOpenPrsByIssue(
     }
     const prInfo: PrInfo = { has_reviewed_label: Number(row.has_reviewed_label) };
     for (const key of keys) {
+      if (keyFilter && !keyFilter.has(key)) continue;
       const existing = openPrsByIssue.get(key);
       if (existing) {
         existing.push(prInfo);

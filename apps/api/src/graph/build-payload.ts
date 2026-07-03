@@ -65,7 +65,7 @@ export async function buildGraphPayload(opts: BuildGraphOptions): Promise<GraphB
   const { db, visible, sealedKeys, tenantId, keys, statusFilter, closedUnderOpenEpic } = opts;
   let rowsRead = 0;
 
-  const { map: openPrsByIssue, rowsRead: prRows } = await loadOpenPrsByIssue(db, visible);
+  const { map: openPrsByIssue, rowsRead: prRows } = await loadOpenPrsByIssue(db, visible, keys);
   rowsRead += prRows;
 
   let issueRows: Awaited<ReturnType<typeof loadIssuesForKeys>>["rows"];
