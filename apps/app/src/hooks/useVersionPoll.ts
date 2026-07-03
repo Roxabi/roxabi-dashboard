@@ -7,7 +7,7 @@
 
 import { apiFetchConditional } from "@/lib/api";
 import { getVersionEtag, setVersionEtag } from "@/lib/etag-cache";
-import { applyGraphDelta, fetchGraph, GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
+import { applyGraphDelta, GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
 import { type VersionResponse, runtimeConfig } from "@roxabi-live/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
@@ -16,14 +16,6 @@ const VERSION_POLL_MS = runtimeConfig.client.pollIntervalMs.version;
 
 function graphIsReady(client: ReturnType<typeof useQueryClient>): boolean {
   return client.getQueryState(GRAPH_QUERY_KEY)?.status === "success";
-}
-
-/** Deduped graph refetch — never use invalidateQueries (storm of parallel full scans). */
-async function refetchGraphOnce(client: ReturnType<typeof useQueryClient>): Promise<void> {
-  await client.fetchQuery({
-    queryKey: GRAPH_QUERY_KEY,
-    queryFn: ({ client: qc }) => fetchGraph(qc),
-  });
 }
 
 export function useVersionPoll(): void {
@@ -58,14 +50,8 @@ export function useVersionPoll(): void {
       const outcome = await applyGraphDelta(queryClient);
       if (outcome === "applied" || outcome === "noop") {
         lastSeen.current = version;
-        return;
       }
-      try {
-        await refetchGraphOnce(queryClient);
-        lastSeen.current = version;
-      } catch {
-        /* quota or network — keep lastSeen stale so we retry on next bump */
-      }
+      /* fallback: keep lastSeen stale — never full-scan here (~125k graph_rows) */
     })();
   }, [data?.version, queryClient]);
 }
