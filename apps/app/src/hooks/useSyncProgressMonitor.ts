@@ -1,25 +1,17 @@
 /**
  * useSyncProgressMonitor — poll /api/sync/status every 2 s while a bootstrap
  * sync is in progress (ported from frontend/initial-sync.js). Stops polling once
- * the corpus is ready or the sync halts. Refetches the graph as repos land and
- * when the sync completes, so the board fills in live. Returns the latest status
- * for SyncProgressBanner (null until the first response).
+ * the corpus is ready or the sync halts. Applies graph deltas as repos land and
+ * when the sync completes. Returns the latest status for SyncProgressBanner.
  */
 
 import { apiFetch } from "@/lib/api";
-import { applyGraphDelta, fetchGraph, GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
+import { applyGraphDelta, GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
 import { type SyncStatus, runtimeConfig } from "@roxabi-live/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
 const SYNC_POLL_MS = runtimeConfig.client.pollIntervalMs.syncStatus;
-
-async function refetchGraphOnce(client: ReturnType<typeof useQueryClient>): Promise<void> {
-  await client.fetchQuery({
-    queryKey: GRAPH_QUERY_KEY,
-    queryFn: ({ client: qc }) => fetchGraph(qc),
-  });
-}
 
 export function useSyncProgressMonitor(): SyncStatus | null {
   const queryClient = useQueryClient();
@@ -43,41 +35,14 @@ export function useSyncProgressMonitor(): SyncStatus | null {
     if (!data) return;
     const active = data.sync_in_progress || data.sync_running;
     const graphReady = queryClient.getQueryState(GRAPH_QUERY_KEY)?.status === "success";
-
-    const applyGraphUpdate = async (forceFull = false) => {
-      if (!graphReady) return;
-
-      if (forceFull || active) {
-        try {
-          await refetchGraphOnce(queryClient);
-        } catch {
-          /* quota — best effort */
-        }
-        return;
-      }
-
-      const outcome = await applyGraphDelta(queryClient);
-      if (outcome === "fallback") {
-        try {
-          await refetchGraphOnce(queryClient);
-        } catch {
-          /* quota */
-        }
-      }
-    };
+    if (!graphReady) return;
 
     if (data.repos_synced > lastSynced.current) {
       lastSynced.current = data.repos_synced;
-      if (active) {
-        // During bootstrap, delta only — a full scan per repo exhausts graph_rows.
-        if (graphReady) void applyGraphDelta(queryClient);
-      } else {
-        void applyGraphUpdate(false);
-      }
+      void applyGraphDelta(queryClient);
     }
     if (wasActive.current && !active) {
-      // Sync just finished — delta only; a full scan here burns ~125k graph_rows.
-      void applyGraphUpdate(false);
+      void applyGraphDelta(queryClient);
     }
     wasActive.current = active;
   }, [data, queryClient]);
