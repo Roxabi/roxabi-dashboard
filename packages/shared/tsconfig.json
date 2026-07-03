@@ -10,7 +10,8 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
-    "types": []
+    "types": [],
+    "resolveJsonModule": true
   },
-  "include": ["src"]
+  "include": ["src", "config"]
 }

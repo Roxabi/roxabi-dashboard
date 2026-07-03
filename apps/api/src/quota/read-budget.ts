@@ -1,17 +1,18 @@
 /**
  * Graph/issues read-path quota enforcement (#295).
+ * Headroom gates: packages/shared/config/runtime.json → quota.graphRead
  */
 
+import { runtimeConfig } from "@roxabi-live/shared";
 import type { Context } from "hono";
 import type { AuthEnv } from "../auth/types";
 import { getQuotaUsed, spendQuotaClamped } from "./ledger";
 import { type TenantPlan, limitForMetric } from "./limits";
 
-/** Conservative lower bound for one full graph rebuild @ ~5k issues. */
-export const MIN_GRAPH_REBUILD_ROWS = 25_000;
+export const MIN_GRAPH_REBUILD_ROWS =
+  runtimeConfig.quota.graphRead.minFullRebuildHeadroomRows;
 
-/** Lower headroom gate for incremental graph deltas. */
-export const MIN_DELTA_GRAPH_ROWS = 1_000;
+export const MIN_DELTA_GRAPH_ROWS = runtimeConfig.quota.graphRead.minDeltaHeadroomRows;
 
 export function graphQuotaDeniedResponse(c: Context<AuthEnv>): Response {
   const retryAfter = secondsUntilUtcMidnight();

@@ -1,11 +1,14 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { getQuotaUsed, spendQuota, spendQuotaClamped } from "./ledger";
+import { limitForMetric } from "./limits";
 import {
   MIN_GRAPH_REBUILD_ROWS,
   recordGraphRowsSpend,
   reserveGraphRowsBudget,
 } from "./read-budget";
+
+const FREE_GRAPH_ROWS = limitForMetric("free", "graph_rows");
 
 function sqliteAsD1(db: Database.Database): D1Database {
   const wrap = (sql: string, args: unknown[] = []) => {
@@ -56,7 +59,7 @@ describe("quota enforcement integration", () => {
     seedSchema(sqlite);
     const d1 = sqliteAsD1(sqlite);
 
-    await spendQuota(d1, 1, "graph_rows", 125_000 - MIN_GRAPH_REBUILD_ROWS + 1, "free", true);
+    await spendQuota(d1, 1, "graph_rows", FREE_GRAPH_ROWS - MIN_GRAPH_REBUILD_ROWS + 1, "free", true);
 
     await expect(reserveGraphRowsBudget(d1, 1, "free")).resolves.toBe(false);
     await expect(reserveGraphRowsBudget(d1, 1, "free")).resolves.toBe(false);
@@ -71,10 +74,10 @@ describe("quota enforcement integration", () => {
     await expect(recordGraphRowsSpend(d1, 1, 10_000, "free")).resolves.toBe(false);
 
     const used = await getQuotaUsed(d1, 1, "graph_rows");
-    expect(used).toBe(125_000);
+    expect(used).toBe(FREE_GRAPH_ROWS);
 
     const { ok } = await spendQuotaClamped(d1, 1, "graph_rows", 1, "free");
     expect(ok).toBe(false);
-    expect(await getQuotaUsed(d1, 1, "graph_rows")).toBe(125_000);
+    expect(await getQuotaUsed(d1, 1, "graph_rows")).toBe(FREE_GRAPH_ROWS);
   });
 });

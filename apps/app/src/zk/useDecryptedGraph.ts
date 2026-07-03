@@ -17,6 +17,7 @@ import {
   type GraphResponse,
   type RepoSummary,
   annotateNodes,
+  runtimeConfig,
 } from "@roxabi-live/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -36,7 +37,7 @@ export function useDecryptedGraph() {
   const query = useQuery({
     queryKey: GRAPH_QUERY_KEY,
     queryFn: ({ client }) => fetchGraph(client),
-    staleTime: 60_000,
+    staleTime: runtimeConfig.client.graphQueryStaleTimeMs,
     refetchOnWindowFocus: false,
   });
   const data = query.data;

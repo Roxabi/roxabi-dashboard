@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./brand": "./src/brand.ts"
+    "./brand": "./src/brand.ts",
+    "./config": "./src/runtime-config.ts",
+    "./config/runtime.json": "./config/runtime.json"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

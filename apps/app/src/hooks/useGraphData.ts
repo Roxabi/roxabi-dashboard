@@ -13,6 +13,7 @@ import {
   type GraphEdge,
   type RepoSummary,
   annotateNodes,
+  runtimeConfig,
 } from "@roxabi-live/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -23,7 +24,7 @@ export function useGraphData() {
   const query = useQuery({
     queryKey: GRAPH_QUERY_KEY,
     queryFn: ({ client }) => fetchGraph(client),
-    staleTime: 60_000,
+    staleTime: runtimeConfig.client.graphQueryStaleTimeMs,
     refetchOnWindowFocus: false,
   });
 

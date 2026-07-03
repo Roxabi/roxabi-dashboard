@@ -24,3 +24,6 @@ export * from "./dims.ts";
 export * from "./layout.ts";
 export * from "./tone.ts";
 export * from "./hover.ts";
+
+// Runtime tunables (SSOT: packages/shared/config/runtime.json).
+export * from "./runtime-config.ts";

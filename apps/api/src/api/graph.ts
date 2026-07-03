@@ -5,6 +5,7 @@
  * issues touched since that corpus version via graph_changelog (#295 follow-up).
  */
 
+import { runtimeConfig } from "@roxabi-live/shared";
 import type { Context } from "hono";
 import { resolveVisibleRepos } from "../auth/repoAccess";
 import type { AuthEnv } from "../auth/types";
@@ -29,8 +30,8 @@ import {
   reserveGraphRowsBudget,
 } from "../quota/read-budget";
 
-/** Max dirty issues before falling back to a full rebuild. */
-export const MAX_DELTA_KEYS = 400;
+/** Max dirty issues before falling back to a full rebuild (runtime.json). */
+export const MAX_DELTA_KEYS = runtimeConfig.graph.maxDeltaKeys;
 
 export type DevState = "idle" | "dev" | "pr_open" | "pr_reviewed";
 
