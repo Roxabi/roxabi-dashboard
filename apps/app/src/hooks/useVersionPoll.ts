@@ -8,11 +8,11 @@
 import { apiFetchConditional } from "@/lib/api";
 import { getVersionEtag, setVersionEtag } from "@/lib/etag-cache";
 import { applyGraphDelta, fetchGraph, GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
-import type { VersionResponse } from "@roxabi-live/shared";
+import { type VersionResponse, runtimeConfig } from "@roxabi-live/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
-const VERSION_POLL_MS = 15_000;
+const VERSION_POLL_MS = runtimeConfig.client.pollIntervalMs.version;
 
 function graphIsReady(client: ReturnType<typeof useQueryClient>): boolean {
   return client.getQueryState(GRAPH_QUERY_KEY)?.status === "success";

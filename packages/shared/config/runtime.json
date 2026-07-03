@@ -1,0 +1,44 @@
+{
+  "quota": {
+    "plans": {
+      "free": {
+        "webhook_events": 500,
+        "gh_fetches": 150,
+        "graph_rows": 125000,
+        "sync_writes": 1250,
+        "sync_pages": 50
+      },
+      "paid": {
+        "webhook_events": 5000,
+        "gh_fetches": 1500,
+        "graph_rows": 2500000,
+        "sync_writes": 25000,
+        "sync_pages": 500
+      }
+    },
+    "graphRead": {
+      "minFullRebuildHeadroomRows": 25000,
+      "minDeltaHeadroomRows": 1000
+    }
+  },
+  "graph": {
+    "maxDeltaKeys": 400,
+    "changelogKeepDays": 14
+  },
+  "sync": {
+    "maxPages": 500,
+    "window": 20,
+    "bootstrapWindow": 1,
+    "numSlots": 2,
+    "maxDiscoveryProbesPerPass": 10,
+    "branchScanDebounceMs": 300000
+  },
+  "client": {
+    "pollIntervalMs": {
+      "version": 15000,
+      "syncStatus": 2000,
+      "quota": 60000
+    },
+    "graphQueryStaleTimeMs": 60000
+  }
+}

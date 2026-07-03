@@ -8,11 +8,11 @@
 
 import { apiFetch } from "@/lib/api";
 import { applyGraphDelta, fetchGraph, GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
-import type { SyncStatus } from "@roxabi-live/shared";
+import { type SyncStatus, runtimeConfig } from "@roxabi-live/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
-const SYNC_POLL_MS = 2000;
+const SYNC_POLL_MS = runtimeConfig.client.pollIntervalMs.syncStatus;
 
 async function refetchGraphOnce(client: ReturnType<typeof useQueryClient>): Promise<void> {
   await client.fetchQuery({

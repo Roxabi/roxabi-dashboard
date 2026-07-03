@@ -1,8 +1,10 @@
 {
   "compilerOptions": {
     "target": "es2022",
-    "module": "es2022",
+    "module": "ESNext",
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
     "lib": ["es2022"],
     "types": ["@cloudflare/workers-types"],
     "strict": true,

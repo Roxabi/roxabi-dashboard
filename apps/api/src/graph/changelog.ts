@@ -2,6 +2,8 @@
  * graph_changelog — records issue-level graph mutations for delta fetches.
  */
 
+import { runtimeConfig } from "@roxabi-live/shared";
+
 export type GraphChangeOp = "upsert" | "delete";
 
 export interface GraphChangeRow {
@@ -115,7 +117,10 @@ export async function collectGraphChangesSince(
 }
 
 /** Drop entries older than N days (best-effort housekeeping). */
-export async function pruneGraphChangelog(db: D1Database, keepDays = 14): Promise<void> {
+export async function pruneGraphChangelog(
+  db: D1Database,
+  keepDays = runtimeConfig.graph.changelogKeepDays,
+): Promise<void> {
   const cutoff = new Date(Date.now() - keepDays * 86_400_000).toISOString();
   await db
     .prepare(`DELETE FROM graph_changelog WHERE bumped_at < ?`)
