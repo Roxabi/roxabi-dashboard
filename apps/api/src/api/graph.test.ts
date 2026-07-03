@@ -259,7 +259,7 @@ describe("GET /api/graph", () => {
       const res = await testApp.request("/api/graph", {}, makeGraphEnv([], [], [], []));
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body).toEqual({ nodes: [], edges: [], repos: [] });
+      expect(body).toEqual({ nodes: [], edges: [], repos: [], mode: "full", version: "" });
     });
   });
 
@@ -499,7 +499,7 @@ describe("GET /api/graph", () => {
       const { env, capturedSqls } = makeGraphEnvWithCapture([], [], [], [], []);
       const res = await testApp.request("/api/graph", {}, env);
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ nodes: [], edges: [], repos: [] });
+      expect(await res.json()).toEqual({ nodes: [], edges: [], repos: [], mode: "full", version: "" });
       expect(capturedSqls.some((s) => s.includes("has_active_branch"))).toBe(false);
       expect(capturedSqls.some((s) => s.includes("FROM edges"))).toBe(false);
       expect(capturedSqls.some((s) => s.includes("FROM repos"))).toBe(false);

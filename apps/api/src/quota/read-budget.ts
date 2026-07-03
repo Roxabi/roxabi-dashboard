@@ -10,6 +10,9 @@ import { type TenantPlan, limitForMetric } from "./limits";
 /** Conservative lower bound for one full graph rebuild @ ~5k issues. */
 export const MIN_GRAPH_REBUILD_ROWS = 25_000;
 
+/** Lower headroom gate for incremental graph deltas. */
+export const MIN_DELTA_GRAPH_ROWS = 1_000;
+
 export function graphQuotaDeniedResponse(c: Context<AuthEnv>): Response {
   const retryAfter = secondsUntilUtcMidnight();
   return c.json({ error: "quota_exceeded", metric: "graph_rows", retry_after: retryAfter }, 429, {
@@ -22,10 +25,11 @@ export async function reserveGraphRowsBudget(
   db: D1Database,
   tenantId: number,
   plan: TenantPlan,
+  minHeadroom = MIN_GRAPH_REBUILD_ROWS,
 ): Promise<boolean> {
   const used = await getQuotaUsed(db, tenantId, "graph_rows");
   const limit = limitForMetric(plan, "graph_rows");
-  return used < limit && limit - used >= MIN_GRAPH_REBUILD_ROWS;
+  return used < limit && limit - used >= minHeadroom;
 }
 
 export async function recordGraphRowsSpend(

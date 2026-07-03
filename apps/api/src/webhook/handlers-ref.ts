@@ -17,6 +17,7 @@ import {
 } from "../quota";
 import { BRANCH_ISSUE_RE, syncBranches } from "../sync/sync";
 import type { Env } from "../types";
+import { graphChangelogForRepoMilestoneStmt } from "../graph/changelog";
 import { renameMilestone, setActiveBranch, upsertPrState } from "./mutations";
 
 /**
@@ -29,9 +30,9 @@ import { renameMilestone, setActiveBranch, upsertPrState } from "./mutations";
 export async function handleRefCreate(
   payload: Record<string, unknown>,
   db: D1Database,
-): Promise<boolean> {
+): Promise<Array<{ issue_key: string; op: "upsert" }>> {
   if (payload.ref_type !== "branch") {
-    return false;
+    return [];
   }
   const ref = (payload.ref as string | undefined) ?? "";
   const repo = (payload.repository as Record<string, unknown> | undefined)?.full_name as
@@ -40,11 +41,11 @@ export async function handleRefCreate(
   const repoStr = repo ?? "";
   const m = BRANCH_ISSUE_RE.exec(ref);
   if (!m) {
-    return false;
+    return [];
   }
   const number = Number.parseInt(m[1], 10);
   await setActiveBranch(db, repoStr, number, 1).run();
-  return true;
+  return [{ issue_key: `${repoStr}#${number}`, op: "upsert" }];
 }
 
 /**
@@ -131,7 +132,7 @@ export async function handleRefDelete(
 export async function handlePullRequest(
   payload: Record<string, unknown>,
   db: D1Database,
-): Promise<boolean> {
+): Promise<Array<{ issue_key: string; op: "upsert" }>> {
   const pr = (payload.pull_request as Record<string, unknown> | undefined) ?? {};
   const repo = (payload.repository as Record<string, unknown> | undefined)?.full_name as
     | string
@@ -142,7 +143,7 @@ export async function handlePullRequest(
     console.warn(
       `[webhook] pull_request webhook missing PR number; payload keys: ${Object.keys(pr).join(",")}`,
     );
-    return false;
+    return [];
   }
 
   const rawState = String(pr.state ?? "open");
@@ -177,7 +178,7 @@ export async function handlePullRequest(
     closingIssueKeysJson,
     updatedAt,
   ).run();
-  return true;
+  return closingIssueKeys.map((issue_key) => ({ issue_key, op: "upsert" as const }));
 }
 
 /**
@@ -208,6 +209,10 @@ export async function handleMilestone(
       | string
       | undefined) ?? "",
   );
-  await renameMilestone(db, repo, oldTitle, newTitle).run();
+  const iso = new Date().toISOString();
+  await db.batch([
+    renameMilestone(db, repo, oldTitle, newTitle),
+    graphChangelogForRepoMilestoneStmt(db, repo, newTitle, iso),
+  ]);
   return true;
 }

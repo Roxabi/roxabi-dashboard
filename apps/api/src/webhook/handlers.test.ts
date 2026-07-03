@@ -362,7 +362,7 @@ describe("handleDeps", () => {
         const result = await handleDeps(payload, db, baseEnv);
 
         // Assert — no-op
-        expect(result).toBe(0);
+        expect(result).toEqual({ mutated: false, graphChanges: [] });
         expect(stmts()).toHaveLength(0);
         expect(vi.mocked(db.batch)).not.toHaveBeenCalled();
       },
@@ -409,8 +409,8 @@ describe("handleDeps", () => {
       // Act — must NOT throw
       const result = await handleDeps(payload, db, { ...baseEnv, DB: db });
 
-      // Assert — returns 0, does not propagate error
-      expect(result).toBe(0);
+      // Assert — no mutation, does not propagate error
+      expect(result).toEqual({ mutated: false, graphChanges: [] });
     });
 
     it("swallows non-GraphQLError — catch-all returns 0 for any error type", async () => {
@@ -428,7 +428,7 @@ describe("handleDeps", () => {
       const result = await handleDeps(payload, db, { ...baseEnv, DB: db });
 
       // Assert — catch swallows all errors, not just GraphQLError
-      expect(result).toBe(0);
+      expect(result).toEqual({ mutated: false, graphChanges: [] });
     });
 
     // RED (S3 — future multi-tenant): handleDeps cross-repo path must use resolveInstallToken,
@@ -550,7 +550,7 @@ describe("handleSubIssues", () => {
         const result = await handleSubIssues(payload, db);
 
         // Assert — no-op
-        expect(result).toBe(0);
+        expect(result).toEqual({ mutated: false, graphChanges: [] });
         expect(stmts()).toHaveLength(0);
       },
     );

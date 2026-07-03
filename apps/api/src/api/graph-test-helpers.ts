@@ -100,6 +100,15 @@ function graphDbRows(
   sealedIssueKeys: string[],
 ): FakeResult[] {
   const lower = sql.toLowerCase();
+  if (lower.includes("from graph_changelog")) {
+    return [];
+  }
+  if (lower.includes("max(v) as version") || lower.includes("max(last_synced_at)")) {
+    return [{ version: "" }];
+  }
+  if (lower.includes("from sync_control") && lower.includes("data_version")) {
+    return [{ v: "" }];
+  }
   const issueRows = issues as Array<{ repo: string; updated_at?: string | null }>;
   if (lower.includes("group by repo")) {
     return aggregateRepoActivity(issueRows);

@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { getCorpusVersion } from "../graph/corpus-version";
 import { etagMatches } from "../quota";
 import type { Env } from "../types";
 
@@ -18,14 +19,7 @@ import type { Env } from "../types";
  * which path produced it. Resolves #133.
  */
 export const versionRoute = async (c: Context<{ Bindings: Env }>) => {
-  const row = await c.env.DB.prepare(
-    `SELECT MAX(v) AS version FROM (
-       SELECT COALESCE(MAX(last_synced_at), '') AS v FROM sync_state
-       UNION ALL
-       SELECT COALESCE(value, '') AS v FROM sync_control WHERE key = 'data_version' AND tenant_id = 0
-     )`,
-  ).first<{ version: string | null }>();
-  const version = row?.version ?? "";
+  const version = await getCorpusVersion(c.env.DB);
   const etag = `"${version}"`;
   if (etagMatches(c.req.header("if-none-match"), etag)) {
     return c.body(null, 304, { ETag: etag, "Cache-Control": "max-age=10" });

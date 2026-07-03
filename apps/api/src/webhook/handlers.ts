@@ -13,6 +13,7 @@
 import type { Context } from "hono";
 import type { Env } from "../types";
 
+import { graphChangelogStmts } from "../graph/changelog";
 import { getTenantPlan, markRepoDirty, spendQuota } from "../quota";
 import { handleMember, handleMembership, handleRepository } from "./handlers-access";
 import { handleInstallation, handleInstallationRepositories } from "./handlers-app";
@@ -146,19 +147,25 @@ export async function webhookRoute(c: Context<{ Bindings: Env }>): Promise<Respo
   }
 
   let mutated = false;
+  const graphChanges: Array<{ issue_key: string; op: "upsert" | "delete" }> = [];
 
   try {
     if (event === "issues") {
-      await handleIssues(payload, db, c.env);
-      mutated = true;
+      const result = await handleIssues(payload, db, c.env);
+      mutated = result.mutated;
+      graphChanges.push(...result.graphChanges);
     } else if (event === "issue_dependencies") {
-      const changed = await handleDeps(payload, db, c.env);
-      mutated = changed > 0;
+      const result = await handleDeps(payload, db, c.env);
+      mutated = result.mutated;
+      graphChanges.push(...result.graphChanges);
     } else if (event === "sub_issues") {
-      const changed = await handleSubIssues(payload, db);
-      mutated = changed > 0;
+      const result = await handleSubIssues(payload, db);
+      mutated = result.mutated;
+      graphChanges.push(...result.graphChanges);
     } else if (event === "create") {
-      mutated = await handleRefCreate(payload, db);
+      const changes = await handleRefCreate(payload, db);
+      graphChanges.push(...changes);
+      mutated = changes.length > 0;
     } else if (event === "delete") {
       const deleteQuota =
         tenant != null
@@ -166,7 +173,9 @@ export async function webhookRoute(c: Context<{ Bindings: Env }>): Promise<Respo
           : undefined;
       mutated = await handleRefDelete(payload, db, c.env, deleteQuota);
     } else if (event === "pull_request") {
-      mutated = await handlePullRequest(payload, db);
+      const changes = await handlePullRequest(payload, db);
+      graphChanges.push(...changes);
+      mutated = changes.length > 0;
     } else if (event === "milestone") {
       mutated = await handleMilestone(payload, db);
       // App lifecycle events self-bump data_version inside their atomic batch — do not set `mutated`.
@@ -188,7 +197,7 @@ export async function webhookRoute(c: Context<{ Bindings: Env }>): Promise<Respo
 
   if (mutated) {
     const iso = new Date().toISOString();
-    await db.batch([bumpDataVersion(db, iso)]);
+    await db.batch([...graphChangelogStmts(db, iso, graphChanges), bumpDataVersion(db, iso)]);
   }
 
   return c.json({ ok: true });

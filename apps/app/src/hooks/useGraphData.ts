@@ -7,40 +7,22 @@
  * (status[], closed_under_open_epic) join the queryKey in slice 3.
  */
 
-import { ApiError, apiFetchConditional } from "@/lib/api";
-import { getGraphEtag, setGraphEtag } from "@/lib/etag-cache";
+import { GRAPH_QUERY_KEY, fetchGraph } from "@/lib/graph-fetch";
 import {
   type AnnotatedNode,
   type GraphEdge,
-  type GraphResponse,
   type RepoSummary,
   annotateNodes,
 } from "@roxabi-live/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-export const GRAPH_QUERY_KEY = ["graph"] as const;
+export { GRAPH_QUERY_KEY };
 
 export function useGraphData() {
   const query = useQuery({
     queryKey: GRAPH_QUERY_KEY,
-    queryFn: async ({ client }) => {
-      try {
-        const result = await apiFetchConditional<GraphResponse>("/api/graph", getGraphEtag());
-        if (result.notModified) {
-          const cached = client.getQueryData<GraphResponse>(GRAPH_QUERY_KEY);
-          if (cached) return cached;
-        }
-        setGraphEtag(result.etag);
-        return result.data as GraphResponse;
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 429) {
-          const cached = client.getQueryData<GraphResponse>(GRAPH_QUERY_KEY);
-          if (cached) return cached;
-        }
-        throw err;
-      }
-    },
+    queryFn: ({ client }) => fetchGraph(client),
   });
 
   const nodes = useMemo<AnnotatedNode[]>(

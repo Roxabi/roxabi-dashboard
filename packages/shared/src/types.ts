@@ -66,6 +66,12 @@ export interface GraphResponse {
   nodes: GraphNode[];
   edges: GraphEdge[];
   repos: RepoSummary[];
+  /** `delta` = merge into client cache; `full` = replace cache. */
+  mode?: "full" | "delta";
+  /** Corpus version token (matches /api/version when bumped via data_version). */
+  version?: string;
+  /** Issue keys removed since the client's `since` cursor (delta only). */
+  removed_keys?: string[];
 }
 
 /** GET /api/issues — one list row (worker/src/api/issues.ts listIssuesRoute). */

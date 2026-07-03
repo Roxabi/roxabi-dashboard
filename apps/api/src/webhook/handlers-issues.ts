@@ -21,6 +21,12 @@ import {
   upsertIssueFromWebhook,
 } from "./mutations";
 
+export interface WebhookMutation {
+  mutated: boolean;
+  /** Issue keys to record in graph_changelog (caller batches with data_version bump). */
+  graphChanges: Array<{ issue_key: string; op: "upsert" | "delete" }>;
+}
+
 /**
  * Derive an issue key from a partial issue object plus an optional repo override.
  * Verbatim port of _issue_key() from handlers.py.
@@ -49,7 +55,7 @@ export async function handleIssues(
   payload: Record<string, unknown>,
   db: D1Database,
   env: Env,
-): Promise<void> {
+): Promise<WebhookMutation> {
   const action = payload.action as string | undefined;
   const issue = payload.issue as Record<string, unknown>;
   const repo =
@@ -60,7 +66,7 @@ export async function handleIssues(
 
   if (action === "deleted" || action === "transferred") {
     await deleteIssue(db, key).run();
-    return;
+    return { mutated: true, graphChanges: [{ issue_key: key, op: "delete" }] };
   }
 
   const rawLabels: unknown[] = (issue.labels as unknown[] | undefined) ?? [];
@@ -102,6 +108,7 @@ export async function handleIssues(
 
   // Atomic upsert + label replacement via db.batch (SC9).
   await db.batch([upsertIssueFromWebhook(db, issuePartial), ...replaceLabels(db, key, names)]);
+  return { mutated: true, graphChanges: [{ issue_key: key, op: "upsert" }] };
 }
 
 /**
@@ -171,15 +178,15 @@ export async function handleDeps(
   payload: Record<string, unknown>,
   db: D1Database,
   env: Env,
-): Promise<number> {
+): Promise<WebhookMutation> {
   const action = payload.action as string | undefined;
 
   if (action === "blocking_added" || action === "blocking_removed") {
-    return 0;
+    return { mutated: false, graphChanges: [] };
   }
 
   if (action !== "blocked_by_added" && action !== "blocked_by_removed") {
-    return 0;
+    return { mutated: false, graphChanges: [] };
   }
 
   const blockingIssue = (payload.blocking_issue as Record<string, unknown> | undefined) ?? null;
@@ -191,7 +198,7 @@ export async function handleDeps(
     console.warn(
       `[webhook] handle_deps: unexpected payload shape for ${action} — keys=${Object.keys(payload).join(",")}`,
     );
-    return 0;
+    return { mutated: false, graphChanges: [] };
   }
 
   // Cross-repo case: blocking_issue absent — point-fetch the downstream issue's
@@ -204,7 +211,7 @@ export async function handleDeps(
       console.warn(
         `[webhook] handle_deps: cannot resolve token — malformed repository.full_name=${JSON.stringify(fullName)}`,
       );
-      return 0;
+      return { mutated: false, graphChanges: [] };
     }
     const owner = fullName.slice(0, slashIdx);
     const name = fullName.slice(slashIdx + 1);
@@ -213,9 +220,16 @@ export async function handleDeps(
       token = await resolveInstallToken(db, env, owner, name);
     } catch (err) {
       console.warn(`[webhook] handle_deps: resolveInstallToken failed for ${fullName}`, err);
-      return 0;
+      return { mutated: false, graphChanges: [] };
     }
-    return await pointFetchAndUpsertDeps(db, token, blockedIssue, repoObj);
+    const changed = await pointFetchAndUpsertDeps(db, token, blockedIssue, repoObj);
+    const blockedKey = issueKey(
+      blockedIssue,
+      (payload.repository as Record<string, unknown> | undefined) ?? null,
+    );
+    return changed > 0
+      ? { mutated: true, graphChanges: [{ issue_key: blockedKey, op: "upsert" }] }
+      : { mutated: false, graphChanges: [] };
   }
 
   // Same-repo fast path: both sides are in the payload — use them directly.
@@ -227,15 +241,33 @@ export async function handleDeps(
 
   if (action === "blocked_by_added") {
     const result = await addEdge(db, blockerKey, blockedKey, "blocks").run();
-    return result.meta.changes ?? 0;
+    const changed = result.meta.changes ?? 0;
+    return changed > 0
+      ? {
+          mutated: true,
+          graphChanges: [
+            { issue_key: blockerKey, op: "upsert" },
+            { issue_key: blockedKey, op: "upsert" },
+          ],
+        }
+      : { mutated: false, graphChanges: [] };
   }
 
   if (action === "blocked_by_removed") {
     const result = await removeEdge(db, blockerKey, blockedKey, "blocks").run();
-    return result.meta.changes ?? 0;
+    const changed = result.meta.changes ?? 0;
+    return changed > 0
+      ? {
+          mutated: true,
+          graphChanges: [
+            { issue_key: blockerKey, op: "upsert" },
+            { issue_key: blockedKey, op: "upsert" },
+          ],
+        }
+      : { mutated: false, graphChanges: [] };
   }
 
-  return 0;
+  return { mutated: false, graphChanges: [] };
 }
 
 /**
@@ -249,15 +281,15 @@ export async function handleDeps(
 export async function handleSubIssues(
   payload: Record<string, unknown>,
   db: D1Database,
-): Promise<number> {
+): Promise<WebhookMutation> {
   const action = payload.action as string | undefined;
 
   if (action === "parent_issue_added" || action === "parent_issue_removed") {
-    return 0;
+    return { mutated: false, graphChanges: [] };
   }
 
   if (action !== "sub_issue_added" && action !== "sub_issue_removed") {
-    return 0;
+    return { mutated: false, graphChanges: [] };
   }
 
   const parentIssue = payload.parent_issue as Record<string, unknown> | undefined;
@@ -272,7 +304,7 @@ export async function handleSubIssues(
     console.warn(
       `[webhook] handle_sub_issues: unexpected payload shape for ${action} — keys=${Object.keys(payload).sort().join(",")}`,
     );
-    return 0;
+    return { mutated: false, graphChanges: [] };
   }
 
   let parentKey: string;
@@ -284,14 +316,32 @@ export async function handleSubIssues(
     console.warn(
       `[webhook] handle_sub_issues: malformed payload for ${action} — keys=${Object.keys(payload).sort().join(",")}`,
     );
-    return 0;
+    return { mutated: false, graphChanges: [] };
   }
 
   if (action === "sub_issue_added") {
     const result = await addEdge(db, parentKey, childKey, "parent").run();
-    return result.meta.changes ?? 0;
+    const changed = result.meta.changes ?? 0;
+    return changed > 0
+      ? {
+          mutated: true,
+          graphChanges: [
+            { issue_key: parentKey, op: "upsert" },
+            { issue_key: childKey, op: "upsert" },
+          ],
+        }
+      : { mutated: false, graphChanges: [] };
   }
   // sub_issue_removed
   const result = await removeEdge(db, parentKey, childKey, "parent").run();
-  return result.meta.changes ?? 0;
+  const changed = result.meta.changes ?? 0;
+  return changed > 0
+    ? {
+        mutated: true,
+        graphChanges: [
+          { issue_key: parentKey, op: "upsert" },
+          { issue_key: childKey, op: "upsert" },
+        ],
+      }
+    : { mutated: false, graphChanges: [] };
 }

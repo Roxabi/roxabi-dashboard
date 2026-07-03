@@ -10,8 +10,7 @@
  * change that rotates the session key.
  */
 
-import { GRAPH_QUERY_KEY } from "@/hooks/useGraphData";
-import { apiFetch } from "@/lib/api";
+import { GRAPH_QUERY_KEY, fetchGraph } from "@/lib/graph-fetch";
 import {
   type AnnotatedNode,
   type GraphEdge,
@@ -36,7 +35,7 @@ export function useDecryptedGraph() {
 
   const query = useQuery({
     queryKey: GRAPH_QUERY_KEY,
-    queryFn: () => apiFetch<GraphResponse>("/api/graph"),
+    queryFn: ({ client }) => fetchGraph(client),
   });
   const data = query.data;
 
