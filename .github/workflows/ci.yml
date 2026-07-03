@@ -77,6 +77,8 @@ jobs:
         run: |
           bun --filter @roxabi-live/shared typecheck
           bun --filter @roxabi-live/app typecheck
+      - name: Test (shared — vitest)
+        run: bun --filter @roxabi-live/shared test
       - name: Test (app — vitest)
         run: bun --filter @roxabi-live/app test
       # Marketing: gate on a successful Astro build (astro check has pre-existing

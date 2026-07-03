@@ -3,6 +3,7 @@
  * sync.ts (file-length gate). applyActiveBranches is shared with syncRepoBundle.
  */
 
+import { graphChangelogForRepoStmt } from "../graph/changelog";
 import { MAX_PAGES } from "./constants";
 import { ghGraphql } from "./graphql";
 import { BRANCH_ISSUE_RE } from "./label-vocab";
@@ -45,9 +46,14 @@ export async function applyActiveBranches(
           .bind(repo, ...chunk),
       );
     }
-    await db.batch(stmts);
+    const bumpedAt = new Date().toISOString();
+    await db.batch([...stmts, graphChangelogForRepoStmt(db, repo, bumpedAt)]);
   } else {
-    await db.prepare("UPDATE issues SET has_active_branch=0 WHERE repo=?").bind(repo).run();
+    const bumpedAt = new Date().toISOString();
+    await db.batch([
+      db.prepare("UPDATE issues SET has_active_branch=0 WHERE repo=?").bind(repo),
+      graphChangelogForRepoStmt(db, repo, bumpedAt),
+    ]);
   }
 }
 

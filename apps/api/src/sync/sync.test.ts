@@ -810,12 +810,13 @@ describe("syncBranches", () => {
 
     await syncBranches(db, "fake-token", "Roxabi", "lyra");
 
-    // No matched numbers → single reset UPDATE, no batch
+    // No matched numbers → reset UPDATE + graph_changelog stamp (batched)
     const batchMock = (db as unknown as { batch: ReturnType<typeof vi.fn> }).batch;
-    expect(batchMock).not.toHaveBeenCalled();
+    expect(batchMock).toHaveBeenCalled();
     const resetStmt = capturedStmts.find((s) => s.sql.includes("has_active_branch=0"));
     expect(resetStmt).toBeDefined();
     expect(resetStmt?.args).toEqual(["Roxabi/lyra"]);
+    expect(capturedStmts.some((s) => s.sql.includes("graph_changelog"))).toBe(true);
   });
 });
 

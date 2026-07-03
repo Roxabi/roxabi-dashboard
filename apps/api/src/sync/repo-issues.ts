@@ -3,6 +3,10 @@
  * engine. Split out of sync.ts (file-length gate).
  */
 
+import {
+  graphChangelogForRepoSinceStmt,
+  graphChangelogForRepoStmt,
+} from "../graph/changelog";
 import { MAX_PAGES } from "./constants";
 import { batchChunked } from "./control";
 import { ghGraphql } from "./graphql";
@@ -127,10 +131,16 @@ export async function syncRepoIssues(
     if (!cursor) break;
   }
 
-  // Write sync_state ONCE after full loop
+  // Write sync_state ONCE after full loop + stamp graph_changelog for delta fetches.
   const nowIso = new Date().toISOString();
-  await db
-    .prepare("INSERT OR REPLACE INTO sync_state(repo,last_cursor,last_synced_at) VALUES(?,NULL,?)")
-    .bind(repo, nowIso)
-    .run();
+  const changelogStmt = fullSync || since == null
+    ? graphChangelogForRepoStmt(db, repo, nowIso)
+    : graphChangelogForRepoSinceStmt(db, repo, since, nowIso);
+  await db.batch([
+    db.prepare("INSERT OR REPLACE INTO sync_state(repo,last_cursor,last_synced_at) VALUES(?,NULL,?)").bind(
+      repo,
+      nowIso,
+    ),
+    changelogStmt,
+  ]);
 }
