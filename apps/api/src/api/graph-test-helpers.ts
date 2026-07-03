@@ -87,8 +87,16 @@ export function makeGraphTestApp() {
 
 type RepoAccessRow = { repo: string; is_private: number };
 
+export type GraphChangelogRow = { issue_key: string; op: string; bumped_at: string };
+
+export interface GraphEnvOptions {
+  corpusVersion?: string;
+  changelogRows?: GraphChangelogRow[];
+}
+
 function graphDbRows(
   sql: string,
+  args: unknown[] | undefined,
   labels: unknown[],
   prState: unknown[],
   issues: unknown[],
@@ -98,13 +106,16 @@ function graphDbRows(
   repoAccess: RepoAccessRow[],
   zkOptIn: boolean,
   sealedIssueKeys: string[],
+  options: GraphEnvOptions = {},
 ): FakeResult[] {
   const lower = sql.toLowerCase();
   if (lower.includes("from graph_changelog")) {
-    return [];
+    const since = String(args?.[0] ?? "");
+    const rows = (options.changelogRows ?? []).filter((r) => r.bumped_at > since);
+    return rows.map((r) => ({ issue_key: r.issue_key, op: r.op }));
   }
   if (lower.includes("max(v) as version") || lower.includes("max(last_synced_at)")) {
-    return [{ version: "" }];
+    return [{ version: options.corpusVersion ?? "" }];
   }
   if (lower.includes("from sync_control") && lower.includes("data_version")) {
     return [{ v: "" }];
@@ -144,6 +155,7 @@ export function makeGraphEnv(
   zkOptIn = false,
   sealedIssueKeys: string[] = [],
   repoAccess?: RepoAccessRow[],
+  options?: GraphEnvOptions,
 ): Env {
   const visibleRepos = overrideVisible ?? [
     ...new Set((issues as Array<{ repo: string }>).map((i) => i.repo)),
@@ -160,6 +172,7 @@ export function makeGraphEnv(
       args,
       graphDbRows(
         sql,
+        args,
         labels,
         prState,
         issues,
@@ -169,6 +182,7 @@ export function makeGraphEnv(
         accessRows,
         zkOptIn,
         sealedIssueKeys,
+        options,
       ),
       0,
     ),
@@ -186,10 +200,11 @@ export function makeGraphEnvWithCapture(
   const capturedSqls: string[] = [];
   const visibleRepos = [...new Set((issues as Array<{ repo: string }>).map((i) => i.repo))];
   const accessRows = visibleRepos.map((repo) => ({ repo, is_private: 0 }));
-  const { db } = captureDb((sql, _args) => {
+  const { db } = captureDb((sql, args) => {
     capturedSqls.push(sql);
     return graphDbRows(
       sql,
+      args,
       labels,
       prState,
       issues,

@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { makeFakeDb, makeFakeStmt } from "../test-utils";
 import {
+  collapseGraphChanges,
   collectGraphChangesSince,
   graphChangelogStmts,
 } from "./changelog";
 
 describe("graph_changelog", () => {
+  it("collapseGraphChanges keeps delete over upsert for the same key", () => {
+    expect(
+      collapseGraphChanges([
+        { issue_key: "Roxabi/roxabi-live#1", op: "upsert" },
+        { issue_key: "Roxabi/roxabi-live#1", op: "delete" },
+      ]),
+    ).toEqual([{ issue_key: "Roxabi/roxabi-live#1", op: "delete" }]);
+  });
+
   it("collectGraphChangesSince returns rows after cursor", async () => {
     const rows: Array<{ issue_key: string; op: string; bumped_at: string }> = [];
     const db = makeFakeDb((sql, args) => {
@@ -39,7 +49,7 @@ describe("graph_changelog", () => {
       ]),
     );
 
-    const changes = await collectGraphChangesSince(db, "2026-07-01T12:00:00.000Z");
+    const { changes } = await collectGraphChangesSince(db, "2026-07-01T12:00:00.000Z");
     expect(changes).toEqual([
       { issue_key: "Roxabi/roxabi-live#2", op: "upsert" },
       { issue_key: "Roxabi/roxabi-live#9", op: "delete" },

@@ -7,11 +7,10 @@
 
 import { apiFetchConditional } from "@/lib/api";
 import { getVersionEtag, setVersionEtag } from "@/lib/etag-cache";
-import { fetchGraphDelta } from "@/lib/graph-fetch";
+import { applyGraphDelta, GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
 import type { VersionResponse } from "@roxabi-live/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
 
 const VERSION_POLL_MS = 15_000;
 
@@ -41,11 +40,10 @@ export function useVersionPoll(): void {
       return;
     }
     if (lastSeen.current !== version) {
-      lastSeen.current = version;
       void (async () => {
-        const delta = await fetchGraphDelta(queryClient);
-        if (delta) {
-          queryClient.setQueryData(GRAPH_QUERY_KEY, delta);
+        const outcome = await applyGraphDelta(queryClient);
+        if (outcome === "applied" || outcome === "noop") {
+          lastSeen.current = version;
         } else {
           void queryClient.invalidateQueries({ queryKey: GRAPH_QUERY_KEY });
         }

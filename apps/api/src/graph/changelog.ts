@@ -9,6 +9,23 @@ export interface GraphChangeRow {
   op: GraphChangeOp;
 }
 
+/** Collapse duplicate keys in one batch — last op wins (delete > upsert when both). */
+export function collapseGraphChanges(
+  changes: Array<{ issue_key: string; op?: GraphChangeOp }>,
+): Array<{ issue_key: string; op: GraphChangeOp }> {
+  const byKey = new Map<string, GraphChangeOp>();
+  for (const { issue_key, op = "upsert" } of changes) {
+    if (!issue_key) continue;
+    const prev = byKey.get(issue_key);
+    if (prev === "delete" || op === "delete") {
+      byKey.set(issue_key, "delete");
+    } else {
+      byKey.set(issue_key, "upsert");
+    }
+  }
+  return [...byKey.entries()].map(([issue_key, op]) => ({ issue_key, op }));
+}
+
 /** Prepare INSERT statements for one or more issue keys. */
 export function graphChangelogStmts(
   db: D1Database,
@@ -74,10 +91,15 @@ export function graphChangelogForRepoSinceStmt(
     .bind(bumpedAt, repo, sinceIso);
 }
 
+export interface GraphChangesSince {
+  changes: GraphChangeRow[];
+  rowsRead: number;
+}
+
 export async function collectGraphChangesSince(
   db: D1Database,
   since: string,
-): Promise<GraphChangeRow[]> {
+): Promise<GraphChangesSince> {
   const result = await db
     .prepare(
       `SELECT issue_key, op FROM graph_changelog
@@ -86,7 +108,10 @@ export async function collectGraphChangesSince(
     )
     .bind(since)
     .all<GraphChangeRow>();
-  return result.results ?? [];
+  return {
+    changes: result.results ?? [],
+    rowsRead: result.meta?.rows_read ?? 0,
+  };
 }
 
 /** Drop entries older than N days (best-effort housekeeping). */

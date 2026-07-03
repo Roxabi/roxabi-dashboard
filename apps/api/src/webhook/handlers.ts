@@ -13,7 +13,7 @@
 import type { Context } from "hono";
 import type { Env } from "../types";
 
-import { graphChangelogStmts } from "../graph/changelog";
+import { collapseGraphChanges, graphChangelogStmts } from "../graph/changelog";
 import { getTenantPlan, markRepoDirty, spendQuota } from "../quota";
 import { handleMember, handleMembership, handleRepository } from "./handlers-access";
 import { handleInstallation, handleInstallationRepositories } from "./handlers-app";
@@ -197,7 +197,10 @@ export async function webhookRoute(c: Context<{ Bindings: Env }>): Promise<Respo
 
   if (mutated) {
     const iso = new Date().toISOString();
-    await db.batch([...graphChangelogStmts(db, iso, graphChanges), bumpDataVersion(db, iso)]);
+    await db.batch([
+      ...graphChangelogStmts(db, iso, collapseGraphChanges(graphChanges)),
+      bumpDataVersion(db, iso),
+    ]);
   }
 
   return c.json({ ok: true });

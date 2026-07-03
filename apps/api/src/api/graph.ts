@@ -61,10 +61,12 @@ export interface Edge {
   kind: string;
 }
 
+const CORPUS_VERSION_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+
 function parseSinceQuery(raw: string | null): string | null {
   if (!raw) return null;
   const trimmed = raw.trim();
-  if (!trimmed || trimmed.length > 64) return null;
+  if (!trimmed || trimmed.length > 64 || !CORPUS_VERSION_RE.test(trimmed)) return null;
   return trimmed;
 }
 
@@ -127,15 +129,16 @@ export const graphRoute = async (c: Context<AuthEnv>) => {
   let rowsRead = 0;
 
   if (useDelta) {
-    const changes = await collectGraphChangesSince(c.env.DB, since);
+    const { changes, rowsRead: changelogRows } = await collectGraphChangesSince(c.env.DB, since);
+    rowsRead += changelogRows;
     const visibleSet = visibleRepoSet(visible);
-    const removed_keys: string[] = [];
+    const removedSet = new Set<string>();
     const seedKeys = new Set<string>();
 
     for (const change of changes) {
       if (change.op === "delete") {
         if (keyInVisibleRepos(change.issue_key, visibleSet)) {
-          removed_keys.push(change.issue_key);
+          removedSet.add(change.issue_key);
         }
         continue;
       }
@@ -143,6 +146,7 @@ export const graphRoute = async (c: Context<AuthEnv>) => {
         seedKeys.add(change.issue_key);
       }
     }
+    const removed_keys = [...removedSet];
 
     if (seedKeys.size > MAX_DELTA_KEYS) {
       const full = await buildGraphPayload({
@@ -179,6 +183,28 @@ export const graphRoute = async (c: Context<AuthEnv>) => {
 
     const expanded = await expandGraphKeys(c.env.DB, [...seedKeys], visible);
     rowsRead += expanded.rowsRead;
+
+    if (expanded.keys.length > MAX_DELTA_KEYS) {
+      const full = await buildGraphPayload({
+        db: c.env.DB,
+        visible,
+        sealedKeys,
+        tenantId,
+        statusFilter,
+        closedUnderOpenEpic,
+      });
+      rowsRead += full.rowsRead;
+      if (session?.tenantId && tenantPlan) {
+        if (!(await recordGraphRowsSpend(c.env.DB, session.tenantId, rowsRead, tenantPlan))) {
+          return graphQuotaDeniedResponse(c);
+        }
+      }
+      return c.json(
+        { ...full, mode: "full", version: corpusVersion },
+        200,
+        { ETag: etag, "Cache-Control": "private, no-cache" },
+      );
+    }
 
     const delta = await buildGraphPayload({
       db: c.env.DB,

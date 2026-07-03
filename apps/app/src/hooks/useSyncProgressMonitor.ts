@@ -7,11 +7,10 @@
  */
 
 import { apiFetch } from "@/lib/api";
-import { fetchGraphDelta } from "@/lib/graph-fetch";
+import { applyGraphDelta, GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
 import type { SyncStatus } from "@roxabi-live/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
 
 const SYNC_POLL_MS = 2000;
 
@@ -37,14 +36,14 @@ export function useSyncProgressMonitor(): SyncStatus | null {
     if (!data) return;
     const active = data.sync_in_progress || data.sync_running;
     const applyGraphUpdate = async (forceFull = false) => {
-      if (!forceFull) {
-        const delta = await fetchGraphDelta(queryClient);
-        if (delta) {
-          queryClient.setQueryData(GRAPH_QUERY_KEY, delta);
-          return;
-        }
+      if (forceFull || active) {
+        void queryClient.invalidateQueries({ queryKey: GRAPH_QUERY_KEY });
+        return;
       }
-      void queryClient.invalidateQueries({ queryKey: GRAPH_QUERY_KEY });
+      const outcome = await applyGraphDelta(queryClient);
+      if (outcome === "fallback") {
+        void queryClient.invalidateQueries({ queryKey: GRAPH_QUERY_KEY });
+      }
     };
 
     if (data.repos_synced > lastSynced.current) {

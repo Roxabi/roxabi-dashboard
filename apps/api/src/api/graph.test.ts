@@ -505,4 +505,70 @@ describe("GET /api/graph", () => {
       expect(capturedSqls.some((s) => s.includes("FROM repos"))).toBe(false);
     });
   });
+
+  describe("delta fetch (?since=)", () => {
+    const corpusVersion = "2026-07-03T12:00:00.000Z";
+    const since = "2026-07-03T10:00:00.000Z";
+
+    it("returns empty delta when changelog has no rows since cursor", async () => {
+      const issue = graphIssue(1);
+      const env = makeGraphEnv([], [], [issue], [], [], undefined, false, [], undefined, {
+        corpusVersion,
+        changelogRows: [],
+      });
+      const res = await testApp.request(`/api/graph?since=${since}`, {}, env);
+      expect(res.status).toBe(200);
+      const body = await res.json<{
+        mode: string;
+        nodes: unknown[];
+        removed_keys: string[];
+        version: string;
+      }>();
+      expect(body).toMatchObject({
+        mode: "delta",
+        nodes: [],
+        edges: [],
+        repos: [],
+        removed_keys: [],
+        version: corpusVersion,
+      });
+    });
+
+    it("returns patched nodes and removed_keys from changelog", async () => {
+      const issue1 = graphIssue(1, { title: "One" });
+      const deletedKey = `${GRAPH_REPO}#99`;
+      const env = makeGraphEnv([], [], [issue1], [], [], undefined, false, [], undefined, {
+        corpusVersion,
+        changelogRows: [
+          { issue_key: issue1.key, op: "upsert", bumped_at: "2026-07-03T11:00:00.000Z" },
+          { issue_key: deletedKey, op: "delete", bumped_at: "2026-07-03T11:30:00.000Z" },
+        ],
+      });
+      const res = await testApp.request(`/api/graph?since=${since}`, {}, env);
+      expect(res.status).toBe(200);
+      const body = await res.json<{
+        mode: string;
+        nodes: Array<{ key: string; title: string | null }>;
+        removed_keys: string[];
+      }>();
+      expect(body.mode).toBe("delta");
+      expect(body.nodes.map((n) => n.key)).toContain(issue1.key);
+      expect(body.removed_keys).toEqual([deletedKey]);
+    });
+
+    it("treats malformed since as full fetch", async () => {
+      const issue = graphIssue(1, { title: "Full" });
+      const env = makeGraphEnv([], [], [issue], [], [], undefined, false, [], undefined, {
+        corpusVersion,
+        changelogRows: [
+          { issue_key: issue.key, op: "upsert", bumped_at: "2026-07-03T11:00:00.000Z" },
+        ],
+      });
+      const res = await testApp.request("/api/graph?since=not-a-date", {}, env);
+      expect(res.status).toBe(200);
+      const body = await res.json<{ mode: string; nodes: unknown[] }>();
+      expect(body.mode).toBe("full");
+      expect(body.nodes).toHaveLength(1);
+    });
+  });
 });
