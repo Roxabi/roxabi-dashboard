@@ -36,9 +36,10 @@ export async function expandGraphKeys(
     .prepare(
       `SELECT DISTINCT e.src_key, e.dst_key
        FROM edges e
+       INNER JOIN issues si ON si.key = e.src_key
+       INNER JOIN issues di ON di.key = e.dst_key
        WHERE (e.src_key IN (${ph}) OR e.dst_key IN (${ph}))
-         AND e.src_key IN (SELECT key FROM issues WHERE repo IN (${repoPh}))
-         AND e.dst_key IN (SELECT key FROM issues WHERE repo IN (${repoPh}))`,
+         AND si.repo IN (${repoPh}) AND di.repo IN (${repoPh})`,
     )
     .bind(...seedKeys, ...seedKeys, ...visible, ...visible)
     .all<{ src_key: string; dst_key: string }>();

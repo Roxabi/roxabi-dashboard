@@ -258,7 +258,11 @@ export async function loadFullGraphRows(
 
   const edgeRows = await db
     .prepare(
-      `SELECT src_key, dst_key, kind FROM edges WHERE src_key IN (SELECT key FROM issues WHERE repo IN (${ph})) AND dst_key IN (SELECT key FROM issues WHERE repo IN (${ph}))`,
+      `SELECT e.src_key, e.dst_key, e.kind
+       FROM edges e
+       INNER JOIN issues si ON si.key = e.src_key
+       INNER JOIN issues di ON di.key = e.dst_key
+       WHERE si.repo IN (${ph}) AND di.repo IN (${ph})`,
     )
     .bind(...visible, ...visible)
     .all<EdgeRow>();
