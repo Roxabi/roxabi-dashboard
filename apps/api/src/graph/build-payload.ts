@@ -3,14 +3,13 @@
  */
 
 import { filterNodesByStatus, type GraphStatus } from "../graph/status";
+import { loadFullGraphRows, loadRepos } from "./graph-payload-bulk";
 import {
   issueRowToNode,
   loadEdgesForKeys,
-  loadFullGraphRows,
   loadIssuesForKeys,
   loadLabelsForKeys,
   loadOpenPrsByIssue,
-  loadRepos,
 } from "./graph-payload-loaders";
 
 export type {
