@@ -3,6 +3,7 @@
  */
 
 import { apiFetch } from "@/lib/api";
+import { runtimeConfig } from "@roxabi-live/shared";
 import { useQuery } from "@tanstack/react-query";
 
 export type QuotaMetric =
@@ -27,7 +28,7 @@ export interface TenantQuotaStatus {
   any_exhausted: boolean;
 }
 
-const QUOTA_POLL_MS = 60_000;
+const QUOTA_POLL_MS = runtimeConfig.client.pollIntervalMs.quota;
 
 export function useQuotaStatus() {
   return useQuery({

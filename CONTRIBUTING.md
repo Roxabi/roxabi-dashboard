@@ -9,11 +9,17 @@ bun install
 uv sync --group dev   # license check + pre-commit only
 ```
 
-Install pre-commit hooks:
+Install git hooks (pre-commit + pre-push) — or run `make install`, which does
+both steps:
 
 ```bash
-uv run pre-commit install
+bash tools/install-hooks.sh
 ```
+
+Note: plain `pre-commit install` refuses to run when `core.hooksPath` is set
+at any git config scope (e.g. machines with global ccc reindex hooks);
+`tools/install-hooks.sh` writes the same dispatchers directly into the
+effective hooks dir instead.
 
 ## Running Locally
 

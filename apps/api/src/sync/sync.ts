@@ -16,6 +16,7 @@
  * Advisory distributed lock via sync_control.sync_running (stale after 900 s).
  */
 
+import { pruneGraphChangelog } from "../graph/changelog";
 import { getInstallationToken } from "../auth/installToken";
 import { loadZkSealedIssueKeys } from "../auth/zk";
 import { zkStructureOnlyEnabled } from "../auth/zk-flags";
@@ -300,6 +301,7 @@ export async function runSync(env: Env, opts?: RunSyncOptions): Promise<void> {
     outcome = "error";
     console.error("[sync] error:", err);
   } finally {
+    await pruneGraphChangelog(db).catch(() => {});
     await releaseSyncLock(db);
     const quotaTenants = await Promise.all(
       [...billedTenantIds].map(async (tenantId) => ({

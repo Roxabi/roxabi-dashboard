@@ -10,14 +10,14 @@
  * change that rotates the session key.
  */
 
-import { GRAPH_QUERY_KEY } from "@/hooks/useGraphData";
-import { apiFetch } from "@/lib/api";
+import { GRAPH_QUERY_KEY, fetchGraph } from "@/lib/graph-fetch";
 import {
   type AnnotatedNode,
   type GraphEdge,
   type GraphResponse,
   type RepoSummary,
   annotateNodes,
+  runtimeConfig,
 } from "@roxabi-live/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -36,7 +36,9 @@ export function useDecryptedGraph() {
 
   const query = useQuery({
     queryKey: GRAPH_QUERY_KEY,
-    queryFn: () => apiFetch<GraphResponse>("/api/graph"),
+    queryFn: ({ client }) => fetchGraph(client),
+    staleTime: runtimeConfig.client.graphQueryStaleTimeMs,
+    refetchOnWindowFocus: false,
   });
   const data = query.data;
 

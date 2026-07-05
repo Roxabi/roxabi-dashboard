@@ -2,6 +2,8 @@
  * Lossless webhook deferral — mark repos dirty for later reconcile (#295 S3).
  */
 
+import { runtimeConfig } from "@roxabi-live/shared";
+
 /** Clear sync watermark so bootstrap/maintenance picks the repo up again. */
 export async function markRepoDirty(db: D1Database, repo: string): Promise<void> {
   await db
@@ -14,7 +16,7 @@ export async function markRepoDirty(db: D1Database, repo: string): Promise<void>
     .run();
 }
 
-const BRANCH_SCAN_DEBOUNCE_MS = 5 * 60 * 1000;
+const BRANCH_SCAN_DEBOUNCE_MS = runtimeConfig.sync.branchScanDebounceMs;
 
 /**
  * Returns true when a full branch re-scan should run now; false when debounced

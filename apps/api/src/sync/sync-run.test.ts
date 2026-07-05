@@ -156,8 +156,10 @@ describe("runSync", () => {
       expect.stringContaining("no repos discovered across all installations — nothing to sync"),
     );
 
-    // No DELETE statements should have been issued
-    const deleteStmts = db._recorded.filter((s) => s.sql.includes("DELETE"));
+    // No repo-prune DELETE statements (graph_changelog housekeeping is allowed)
+    const deleteStmts = db._recorded.filter(
+      (s) => s.sql.includes("DELETE") && !s.sql.includes("graph_changelog"),
+    );
     expect(deleteStmts).toHaveLength(0);
   });
 });

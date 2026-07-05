@@ -1,18 +1,22 @@
 /**
- * useVersionPoll — poll /api/version every 15 s and invalidate the graph query
- * when the corpus version token changes (hourly cron or a mutating webhook
- * bumps it). Mirrors frontend/app.js::fetchVersion. The first observed value is
- * a baseline, not a change, so it never refetches on mount.
+ * useVersionPoll — poll /api/version every 15 s and apply a graph delta when the
+ * corpus version token changes (hourly cron or a mutating webhook bumps it).
+ * The first observed value is a baseline, not a change, so it never refetches on
+ * mount.
  */
 
 import { apiFetchConditional } from "@/lib/api";
-import { clearGraphEtag, getVersionEtag, setVersionEtag } from "@/lib/etag-cache";
-import type { VersionResponse } from "@roxabi-live/shared";
+import { getVersionEtag, setVersionEtag } from "@/lib/etag-cache";
+import { applyGraphDelta, GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
+import { type VersionResponse, runtimeConfig } from "@roxabi-live/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { GRAPH_QUERY_KEY } from "./useGraphData";
 
-const VERSION_POLL_MS = 15_000;
+const VERSION_POLL_MS = runtimeConfig.client.pollIntervalMs.version;
+
+function graphIsReady(client: ReturnType<typeof useQueryClient>): boolean {
+  return client.getQueryState(GRAPH_QUERY_KEY)?.status === "success";
+}
 
 export function useVersionPoll(): void {
   const queryClient = useQueryClient();
@@ -39,10 +43,15 @@ export function useVersionPoll(): void {
       lastSeen.current = version;
       return;
     }
-    if (lastSeen.current !== version) {
-      lastSeen.current = version;
-      clearGraphEtag();
-      void queryClient.invalidateQueries({ queryKey: GRAPH_QUERY_KEY });
-    }
+    if (lastSeen.current === version) return;
+    if (!graphIsReady(queryClient)) return;
+
+    void (async () => {
+      const outcome = await applyGraphDelta(queryClient);
+      if (outcome === "applied" || outcome === "noop") {
+        lastSeen.current = version;
+      }
+      /* fallback: keep lastSeen stale — never full-scan here (~125k graph_rows) */
+    })();
   }, [data?.version, queryClient]);
 }

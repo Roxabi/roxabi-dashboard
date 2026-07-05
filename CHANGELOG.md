@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.24.0](https://github.com/Roxabi/roxabi-live/compare/roxabi-live/v0.23.0...roxabi-live/v0.24.0) (2026-07-05)
+
+
+### Added
+
+* **api:** incremental graph fetch via `graph_changelog` ([#301](https://github.com/Roxabi/roxabi-live/pull/301))
+* **shared:** centralize runtime tunables in `config/runtime.json` ([#304](https://github.com/Roxabi/roxabi-live/pull/304))
+* **docs:** capture landing product-positioning rationale ([#288](https://github.com/Roxabi/roxabi-live/pull/288))
+
+
+### Fixed
+
+* **api:** scope `pr_state` scan on graph deltas + persist graph cursor ([#302](https://github.com/Roxabi/roxabi-live/pull/302))
+* **app:** stop graph invalidate storm exhausting `graph_rows` quota ([#303](https://github.com/Roxabi/roxabi-live/pull/303))
+* **app:** avoid full graph scan when bootstrap sync completes ([#305](https://github.com/Roxabi/roxabi-live/pull/305))
+* **app:** never fallback to full graph scan on delta miss ([#306](https://github.com/Roxabi/roxabi-live/pull/306))
+* **api:** stop edges subquery burning millions of `graph_rows` ([#307](https://github.com/Roxabi/roxabi-live/pull/307))
+* **api:** split `graph-payload-loaders` under file-length gate
+* **hooks:** reproducible git-hook install despite `core.hooksPath` ([#300](https://github.com/Roxabi/roxabi-live/pull/300))
+
+
+### Changed
+
+* **deps:** bump `actions/checkout` and `trufflehog` ([#308](https://github.com/Roxabi/roxabi-live/pull/308), [#309](https://github.com/Roxabi/roxabi-live/pull/309))
+
+
 ## [0.23.0](https://github.com/Roxabi/roxabi-live/compare/roxabi-live/v0.22.3...roxabi-live/v0.23.0) (2026-07-02)
 
 

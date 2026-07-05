@@ -1,18 +1,17 @@
 /**
  * useSyncProgressMonitor — poll /api/sync/status every 2 s while a bootstrap
  * sync is in progress (ported from frontend/initial-sync.js). Stops polling once
- * the corpus is ready or the sync halts. Invalidates the graph query as repos
- * land and when the sync completes, so the board fills in live. Returns the
- * latest status for SyncProgressBanner (null until the first response).
+ * the corpus is ready or the sync halts. Applies graph deltas as repos land and
+ * when the sync completes. Returns the latest status for SyncProgressBanner.
  */
 
 import { apiFetch } from "@/lib/api";
-import type { SyncStatus } from "@roxabi-live/shared";
+import { applyGraphDelta, GRAPH_QUERY_KEY } from "@/lib/graph-fetch";
+import { type SyncStatus, runtimeConfig } from "@roxabi-live/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { GRAPH_QUERY_KEY } from "./useGraphData";
 
-const SYNC_POLL_MS = 2000;
+const SYNC_POLL_MS = runtimeConfig.client.pollIntervalMs.syncStatus;
 
 export function useSyncProgressMonitor(): SyncStatus | null {
   const queryClient = useQueryClient();
@@ -35,12 +34,15 @@ export function useSyncProgressMonitor(): SyncStatus | null {
   useEffect(() => {
     if (!data) return;
     const active = data.sync_in_progress || data.sync_running;
+    const graphReady = queryClient.getQueryState(GRAPH_QUERY_KEY)?.status === "success";
+    if (!graphReady) return;
+
     if (data.repos_synced > lastSynced.current) {
       lastSynced.current = data.repos_synced;
-      void queryClient.invalidateQueries({ queryKey: GRAPH_QUERY_KEY });
+      void applyGraphDelta(queryClient);
     }
     if (wasActive.current && !active) {
-      void queryClient.invalidateQueries({ queryKey: GRAPH_QUERY_KEY });
+      void applyGraphDelta(queryClient);
     }
     wasActive.current = active;
   }, [data, queryClient]);
