@@ -110,16 +110,13 @@ export function openSettings(me) {
           ${
             installations.length
               ? `<ul class="settings-list">${installations
-                  .map((i) => {
-                    const cfg = i.configure_url
-                      ? `<a class="settings-link-btn" href="${escHtml(i.configure_url)}" target="_blank" rel="noopener noreferrer" aria-label="Configure repositories for ${escHtml(i.account_login)}">Configure</a>`
-                      : "";
-                    return `
+                  .map(
+                    (i) => `
               <li class="settings-install-row">
                 <span><strong>${escHtml(i.account_login)}</strong> <span class="settings-muted">(${escHtml(i.account_type)})</span></span>
-                ${cfg}
-              </li>`;
-                  })
+                <a class="settings-link-btn" href="${escHtml(i.configure_url)}" target="_blank" rel="noopener noreferrer" aria-label="Configure repositories for ${escHtml(i.account_login)}">Configure</a>
+              </li>`,
+                  )
                   .join("")}</ul>`
               : '<p class="settings-muted">No installation linked yet.</p>'
           }

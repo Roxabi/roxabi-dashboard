@@ -12,41 +12,21 @@
  */
 
 import { clearDisplayName, getDisplayName, setDisplayName } from "@/auth/displayName";
+import { installOptionCopy } from "@/auth/installOptionCopy";
 import { useLogout } from "@/auth/useAuthMutations";
+import { ME_QUERY_KEY } from "@/auth/useMe";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { type TFunc, useT } from "@/i18n";
+import { useT } from "@/i18n";
 import { type ApiError, apiFetch } from "@/lib/api";
 import { PassphraseChangeSection } from "@/zk/PassphraseChangeSection";
 import { hasEnrolledThisSession } from "@/zk/enroll";
 import { clearZkReauthProof, getZkReauthProof } from "@/zk/github";
 import { clearLocalZkState } from "@/zk/reset";
 import { requestSettingsReauth } from "@/zk/settingsReauth";
-import type { InstallOption, MePayload } from "@roxabi-live/shared";
-import { useMutation } from "@tanstack/react-query";
+import type { MePayload } from "@roxabi-live/shared";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-
-function optionCopy(opt: InstallOption, t: TFunc): { title: string; name: string; hint: string } {
-  if (opt.kind === "picker") {
-    return {
-      title: t("auth.install.option.orgTitle"),
-      name: t("auth.install.option.pickerName"),
-      hint: t("auth.install.option.pickerHint"),
-    };
-  }
-  if (opt.kind === "personal") {
-    return {
-      title: t("auth.install.option.personalTitle"),
-      name: opt.login ?? "",
-      hint: t("settings.repos.addPersonalHint"),
-    };
-  }
-  return {
-    title: t("auth.install.option.orgTitle"),
-    name: opt.login ?? "",
-    hint: t("settings.repos.addOrgHint"),
-  };
-}
 
 export function SettingsDialog({
   me,
@@ -70,10 +50,29 @@ export function SettingsDialog({
   const login = me.user.github_login;
   const logout = useLogout();
   const t = useT();
+  const qc = useQueryClient();
   const [name, setName] = useState(() => getDisplayName(login));
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const installations = me.installations ?? [];
   const installOptions = me.install_options ?? [];
+
+  // Refresh /api/me when Settings opens or the user returns from a GitHub tab
+  // (configure / add-install open target=_blank).
+  useEffect(() => {
+    if (!open) return;
+    qc.invalidateQueries({ queryKey: ME_QUERY_KEY });
+    const onReturn = () => {
+      if (document.visibilityState === "visible") {
+        qc.invalidateQueries({ queryKey: ME_QUERY_KEY });
+      }
+    };
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onReturn);
+    return () => {
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onReturn);
+    };
+  }, [open, qc]);
 
   const deleteAccount = useMutation<{ redirected: boolean }, ApiError, void>({
     mutationFn: async () => {
@@ -197,7 +196,10 @@ export function SettingsDialog({
               <p className="text-xs text-muted-foreground">{t("settings.repos.addHint")}</p>
               <div className="space-y-2">
                 {installOptions.map((opt) => {
-                  const c = optionCopy(opt, t);
+                  const c = installOptionCopy(opt, t, {
+                    personal: t("settings.repos.addPersonalHint"),
+                    org: t("settings.repos.addOrgHint"),
+                  });
                   return (
                     <a
                       key={`${opt.kind}:${opt.login ?? "picker"}`}

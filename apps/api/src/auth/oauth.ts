@@ -317,9 +317,10 @@ export async function callbackRoute(c: Context<{ Bindings: Env }>): Promise<Resp
     });
   }
 
-  // Shared: personal + orgs (defensive parse). Install-pending always writes
-  // targets (personal-only is fine if orgs flaked). Linked users only replace
-  // the cache when orgs were successfully fetched — never wipe on GitHub outage.
+  // Shared: personal + orgs (defensive parse). Both install-pending and linked
+  // paths only replace cached install_targets_json when /user/orgs succeeded —
+  // never wipe a rich cache on GitHub outage. New users still get personal-only
+  // via INSERT VALUES when orgs flake.
   const { targets: installTargets, orgsFetched } = await fetchInstallTargets(
     access_token,
     ghUser,
@@ -331,7 +332,7 @@ export async function callbackRoute(c: Context<{ Bindings: Env }>): Promise<Resp
       c.env.DB,
       ghUser,
       installTargets,
-      /* replaceTargets */ true,
+      orgsFetched,
     );
 
     if (!userRow) {

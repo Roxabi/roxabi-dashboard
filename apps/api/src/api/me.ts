@@ -3,6 +3,7 @@
  * /logout  — revoke session cookie.
  */
 
+import type { MePayload } from "@roxabi-live/shared";
 import type { Context } from "hono";
 import { AUTH_NO_CACHE, clearSessionCookieHeaders, readSessionToken } from "../auth/cookies";
 import { githubConfigureUrl } from "../auth/github-install";
@@ -16,30 +17,8 @@ import type { AuthEnv, SessionContext } from "../auth/types";
 import { zkAccountKeyEnabled } from "../auth/zk-flags";
 import type { Env } from "../types";
 
-export interface MePayload {
-  user: {
-    github_id: number;
-    github_login: string;
-    zk_opt_in: boolean;
-    zk_enrolled: boolean;
-    zk_account_key_enabled: boolean;
-  };
-  active_tenant_id: number | null;
-  /** @deprecated use onboarding_step */
-  install_pending: boolean;
-  /** @deprecated use install_options */
-  install_targets: Array<{ id: number; login: string; type: string }>;
-  install_options: Array<{ kind: string; login?: string; url: string }>;
-  installations: Array<{
-    tenant_id: number;
-    account_login: string;
-    account_type: string;
-    /** GitHub deep-link to manage repos for this install (installation_id not raw-exported). */
-    configure_url: string;
-  }>;
-  onboarding_step: "install" | "consent" | "ready";
-  consent_at: string | null;
-}
+/** Wire contract SSOT: `@roxabi-live/shared` MePayload. */
+export type { MePayload };
 
 /** Shared /api/me body builder — used by GET /api/me and POST /api/install/refresh. */
 export async function buildMePayload(env: Env, session: SessionContext): Promise<MePayload> {
