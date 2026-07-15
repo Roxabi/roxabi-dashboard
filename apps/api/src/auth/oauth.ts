@@ -12,6 +12,7 @@ import type { Context } from "hono";
 import type { Env } from "../types";
 import { authRedirect, readSessionToken, sanitizeAuthRedirect, stripInstallParam } from "./cookies";
 import { githubRestGet } from "./github-rest";
+import { fetchInstallTargets, upsertUserWithInstallTargets } from "./install-targets";
 import { tryLinkInstallPendingSession } from "./link-install";
 import { serveLoginPrompt } from "./login-prompt";
 import { completeOAuthSession } from "./post-oauth";
@@ -251,35 +252,23 @@ export async function callbackRoute(c: Context<{ Bindings: Env }>): Promise<Resp
     });
   }
 
+  // Shared: personal + orgs (defensive parse). Both install-pending and linked
+  // paths only replace cached install_targets_json when /user/orgs succeeded —
+  // never wipe a rich cache on GitHub outage. New users still get personal-only
+  // via INSERT VALUES when orgs flake.
+  const { targets: installTargets, orgsFetched } = await fetchInstallTargets(
+    access_token,
+    ghUser,
+  );
+
   // No installations — mint install-pending session and show our install guide
   if (installations.length === 0) {
-    const orgsRes = await githubRestGet(
-      "https://api.github.com/user/orgs?per_page=100",
-      access_token,
+    const userRow = await upsertUserWithInstallTargets(
+      c.env.DB,
+      ghUser,
+      installTargets,
+      orgsFetched,
     );
-    const orgs = orgsRes.ok ? ((await orgsRes.json()) as Array<{ id: number; login: string }>) : [];
-
-    const installTargets = [
-      { id: ghUser.id, login: ghUser.login, type: "User" as const },
-      ...orgs.map((o) => ({
-        id: o.id,
-        login: o.login,
-        type: "Organization" as const,
-      })),
-    ];
-
-    const userRow = await c.env.DB.prepare(
-      `INSERT INTO users (github_id, github_login, zk_opt_in, install_targets_json)
-       VALUES (?, ?, 1, ?)
-       ON CONFLICT(github_id) DO UPDATE SET
-         github_login=excluded.github_login,
-         zk_opt_in=1,
-         install_targets_json=excluded.install_targets_json,
-         updated_at=datetime('now')
-       RETURNING id`,
-    )
-      .bind(ghUser.id, ghUser.login, JSON.stringify(installTargets))
-      .first<{ id: number }>();
 
     if (!userRow) {
       return c.json({ error: "db_error" }, 500);
@@ -290,19 +279,13 @@ export async function callbackRoute(c: Context<{ Bindings: Env }>): Promise<Resp
     return completeOAuthSession(c, rawToken, redirectAfter, rememberSession);
   }
 
-  // Upsert user — get internal id
-  const userRow = await c.env.DB.prepare(
-    `INSERT INTO users (github_id, github_login, zk_opt_in, install_targets_json)
-     VALUES (?, ?, 1, NULL)
-     ON CONFLICT(github_id) DO UPDATE SET
-       github_login=excluded.github_login,
-       zk_opt_in=1,
-       install_targets_json=NULL,
-       updated_at=datetime('now')
-     RETURNING id`,
-  )
-    .bind(ghUser.id, ghUser.login)
-    .first<{ id: number }>();
+  // Upsert user — get internal id (keep prior install_targets_json if orgs fetch failed)
+  const userRow = await upsertUserWithInstallTargets(
+    c.env.DB,
+    ghUser,
+    installTargets,
+    orgsFetched,
+  );
 
   if (!userRow) {
     return c.json({ error: "db_error" }, 500);

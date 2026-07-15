@@ -4,10 +4,17 @@
  * the reauth-gated delete (deferred from slice 7) are wired here in slice 10:
  * both privileged actions bounce through OAuth step-up via requestSettingsReauth
  * and resume on return (?settings=passphrase / ?settings=delete).
+ *
+ * Repositories: list linked installations with per-install "Configure" deep-links,
+ * plus install_options cards (personal / org / picker) to add another account —
+ * mirrors InstallGate so Settings is not a single link that lands on the only
+ * existing GitHub install.
  */
 
 import { clearDisplayName, getDisplayName, setDisplayName } from "@/auth/displayName";
+import { installOptionCopy } from "@/auth/installOptionCopy";
 import { useLogout } from "@/auth/useAuthMutations";
+import { ME_QUERY_KEY } from "@/auth/useMe";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useT } from "@/i18n";
@@ -18,18 +25,8 @@ import { clearZkReauthProof, getZkReauthProof } from "@/zk/github";
 import { clearLocalZkState } from "@/zk/reset";
 import { requestSettingsReauth } from "@/zk/settingsReauth";
 import type { MePayload } from "@roxabi-live/shared";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-
-function configureUrl(me: MePayload): string | null {
-  const opts = me.install_options ?? [];
-  return (
-    opts.find((o) => o.kind === "personal")?.url ??
-    opts.find((o) => o.kind === "picker")?.url ??
-    opts[0]?.url ??
-    null
-  );
-}
 
 export function SettingsDialog({
   me,
@@ -53,10 +50,29 @@ export function SettingsDialog({
   const login = me.user.github_login;
   const logout = useLogout();
   const t = useT();
+  const qc = useQueryClient();
   const [name, setName] = useState(() => getDisplayName(login));
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const installUrl = configureUrl(me);
   const installations = me.installations ?? [];
+  const installOptions = me.install_options ?? [];
+
+  // Refresh /api/me when Settings opens or the user returns from a GitHub tab
+  // (configure / add-install open target=_blank).
+  useEffect(() => {
+    if (!open) return;
+    qc.invalidateQueries({ queryKey: ME_QUERY_KEY });
+    const onReturn = () => {
+      if (document.visibilityState === "visible") {
+        qc.invalidateQueries({ queryKey: ME_QUERY_KEY });
+      }
+    };
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onReturn);
+    return () => {
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onReturn);
+    };
+  }, [open, qc]);
 
   const deleteAccount = useMutation<{ redirected: boolean }, ApiError, void>({
     mutationFn: async () => {
@@ -140,34 +156,71 @@ export function SettingsDialog({
           </p>
         </section>
 
-        <section className="space-y-2">
+        <section className="space-y-3">
           <h3 className="text-sm font-semibold text-foreground">{t("settings.repos.heading")}</h3>
-          <p className="text-xs text-muted-foreground">
-            {t("settings.repos.hint")}
-          </p>
+          <p className="text-xs text-muted-foreground">{t("settings.repos.hint")}</p>
+
           {installations.length ? (
-            <ul className="space-y-1 text-sm">
+            <ul className="space-y-2">
               {installations.map((i) => (
-                <li key={i.tenant_id} className="text-foreground">
-                  <strong>{i.account_login}</strong>{" "}
-                  <span className="text-muted-foreground">({i.account_type})</span>
+                <li
+                  key={i.tenant_id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                >
+                  <span className="text-foreground">
+                    <strong>{i.account_login}</strong>{" "}
+                    <span className="text-muted-foreground">({i.account_type})</span>
+                  </span>
+                  <a
+                    href={i.configure_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={t("settings.repos.configureAria", { login: i.account_login })}
+                    data-testid={`settings-configure-${i.account_login}`}
+                    className="text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {t("settings.repos.configure")}
+                  </a>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {t("settings.repos.empty")}
-            </p>
+            <p className="text-sm text-muted-foreground">{t("settings.repos.empty")}</p>
           )}
-          {installUrl && (
-            <a
-              href={installUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block text-sm text-primary underline-offset-4 hover:underline"
-            >
-              {t("settings.repos.configure")}
-            </a>
+
+          {installOptions.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t("settings.repos.addHeading")}
+              </h4>
+              <p className="text-xs text-muted-foreground">{t("settings.repos.addHint")}</p>
+              <div className="space-y-2">
+                {installOptions.map((opt) => {
+                  const c = installOptionCopy(opt, t, {
+                    personal: t("settings.repos.addPersonalHint"),
+                    org: t("settings.repos.addOrgHint"),
+                  });
+                  return (
+                    <a
+                      key={`${opt.kind}:${opt.login ?? "picker"}`}
+                      href={opt.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-md border border-border p-3 transition-colors hover:border-primary hover:bg-card/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      data-testid={`settings-install-${opt.kind}-${opt.login ?? "picker"}`}
+                    >
+                      <span className="block text-xs uppercase tracking-wide text-muted-foreground">
+                        {c.title}
+                      </span>
+                      {c.name ? (
+                        <span className="block font-medium text-foreground">{c.name}</span>
+                      ) : null}
+                      <span className="block text-xs text-muted-foreground">{c.hint}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </section>
 

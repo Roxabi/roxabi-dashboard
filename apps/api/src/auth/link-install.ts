@@ -49,12 +49,8 @@ export async function tryLinkInstallPendingSession(
     return null;
   }
 
-  await db
-    .prepare(
-      `UPDATE users SET install_targets_json = NULL, updated_at = datetime('now') WHERE id = ?`,
-    )
-    .bind(session.userId)
-    .run();
+  // Keep install_targets_json: Settings uses it so the user can install on
+  // additional orgs/accounts after the first link (do not clear here).
 
   return tenantId;
 }
