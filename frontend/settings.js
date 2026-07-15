@@ -43,11 +43,7 @@ export function openSettings(me) {
   const displayName = getDisplayName(login);
   const themePref = getThemePref();
   const installations = me.installations ?? [];
-  const installUrl =
-    (me.install_options ?? []).find((o) => o.kind === "personal")?.url ??
-    (me.install_options ?? []).find((o) => o.kind === "picker")?.url ??
-    (me.install_options ?? [])[0]?.url ??
-    null;
+  const installOptions = me.install_options ?? [];
 
   gate.innerHTML = `
     <div class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
@@ -110,19 +106,42 @@ export function openSettings(me) {
 
         <section class="settings-section">
           <h3>Repositories</h3>
-          <p class="settings-hint">Add or remove repositories the GitHub App can access.</p>
+          <p class="settings-hint">Manage linked installations, or install the App on another account / organisation.</p>
           ${
             installations.length
               ? `<ul class="settings-list">${installations
-                  .map(
-                    (i) => `
-              <li><strong>${escHtml(i.account_login)}</strong> <span class="settings-muted">(${escHtml(i.account_type)})</span></li>
-            `,
-                  )
+                  .map((i) => {
+                    const cfg = i.configure_url
+                      ? `<a class="settings-link-btn" href="${escHtml(i.configure_url)}" target="_blank" rel="noopener noreferrer" aria-label="Configure repositories for ${escHtml(i.account_login)}">Configure</a>`
+                      : "";
+                    return `
+              <li class="settings-install-row">
+                <span><strong>${escHtml(i.account_login)}</strong> <span class="settings-muted">(${escHtml(i.account_type)})</span></span>
+                ${cfg}
+              </li>`;
+                  })
                   .join("")}</ul>`
               : '<p class="settings-muted">No installation linked yet.</p>'
           }
-          <a class="settings-link-btn" href="${escHtml(installUrl)}" target="_blank" rel="noopener noreferrer">Configure repositories on GitHub</a>
+          ${
+            installOptions.length
+              ? `<div class="settings-add-install">
+            <h4 class="settings-subhead">Add an installation</h4>
+            <p class="settings-hint">Pick a personal account, a known organisation, or the GitHub picker for another org.</p>
+            <ul class="settings-list">${installOptions
+              .map((opt) => {
+                const label =
+                  opt.kind === "picker"
+                    ? "Choose on GitHub"
+                    : opt.kind === "personal"
+                      ? `Personal · ${escHtml(opt.login ?? "")}`
+                      : `Organisation · ${escHtml(opt.login ?? "")}`;
+                return `<li><a class="settings-link-btn" href="${escHtml(opt.url)}" target="_blank" rel="noopener noreferrer">${label}</a></li>`;
+              })
+              .join("")}</ul>
+          </div>`
+              : ""
+          }
         </section>
 
         <section class="settings-section">

@@ -172,16 +172,16 @@ export function SettingsDialog({
                     <strong>{i.account_login}</strong>{" "}
                     <span className="text-muted-foreground">({i.account_type})</span>
                   </span>
-                  {i.configure_url ? (
-                    <a
-                      href={i.configure_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-primary underline-offset-4 hover:underline"
-                    >
-                      {t("settings.repos.configure")}
-                    </a>
-                  ) : null}
+                  <a
+                    href={i.configure_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={t("settings.repos.configureAria", { login: i.account_login })}
+                    data-testid={`settings-configure-${i.account_login}`}
+                    className="text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {t("settings.repos.configure")}
+                  </a>
                 </li>
               ))}
             </ul>
@@ -204,8 +204,8 @@ export function SettingsDialog({
                       href={opt.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block rounded-md border border-border p-3 transition-colors hover:border-primary hover:bg-card/60"
-                      data-testid={`settings-install-${opt.kind}`}
+                      className="block rounded-md border border-border p-3 transition-colors hover:border-primary hover:bg-card/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      data-testid={`settings-install-${opt.kind}-${opt.login ?? "picker"}`}
                     >
                       <span className="block text-xs uppercase tracking-wide text-muted-foreground">
                         {c.title}

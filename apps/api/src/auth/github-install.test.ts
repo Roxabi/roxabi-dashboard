@@ -56,6 +56,12 @@ describe("githubConfigureUrl", () => {
       "https://github.com/organizations/Roxabi/settings/installations/55",
     );
   });
+
+  it("encodes reserved characters in organisation login path segment", () => {
+    expect(githubConfigureUrl(7, "acme/corp", "Organization")).toBe(
+      "https://github.com/organizations/acme%2Fcorp/settings/installations/7",
+    );
+  });
 });
 
 describe("parseInstallTargets", () => {

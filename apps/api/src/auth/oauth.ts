@@ -11,6 +11,7 @@
 import type { Context } from "hono";
 import type { Env } from "../types";
 import { authRedirect, readSessionToken, sanitizeAuthRedirect, stripInstallParam } from "./cookies";
+import type { InstallTarget } from "./github-install";
 import { githubRestGet } from "./github-rest";
 import { tryLinkInstallPendingSession } from "./link-install";
 import { serveLoginPrompt } from "./login-prompt";
@@ -20,6 +21,71 @@ import { pickSessionTenantId, supersedeStaleTenants } from "./tenant-supersede";
 import { createUserTokenHandoff } from "./userTokenHandoff";
 import { zkAccountKeyEnabled } from "./zk-flags";
 import { createZkReauthCode } from "./zk-reauth";
+
+/**
+ * Personal + orgs the user can install the App on.
+ * `orgsFetched` is true only when GitHub returned a parseable org list — callers
+ * must not overwrite a cached `install_targets_json` when it is false.
+ */
+export async function fetchInstallTargets(
+  accessToken: string,
+  ghUser: { id: number; login: string },
+): Promise<{ targets: InstallTarget[]; orgsFetched: boolean }> {
+  const orgsRes = await githubRestGet(
+    "https://api.github.com/user/orgs?per_page=100",
+    accessToken,
+  );
+  let orgs: Array<{ id: number; login: string }> = [];
+  let orgsFetched = false;
+  if (orgsRes.ok) {
+    try {
+      const body = (await orgsRes.json()) as unknown;
+      if (Array.isArray(body)) {
+        orgs = body as Array<{ id: number; login: string }>;
+        orgsFetched = true;
+      }
+    } catch {
+      orgsFetched = false;
+    }
+  }
+  const targets: InstallTarget[] = [
+    { id: ghUser.id, login: ghUser.login, type: "User" },
+    ...orgs.map((o) => ({
+      id: o.id,
+      login: o.login,
+      type: "Organization" as const,
+    })),
+  ];
+  return { targets, orgsFetched };
+}
+
+/**
+ * Upsert user row. When `replaceTargets` is false, keep existing
+ * `install_targets_json` on conflict (GitHub /user/orgs flaked).
+ */
+export async function upsertUserWithInstallTargets(
+  db: D1Database,
+  ghUser: { id: number; login: string },
+  targets: InstallTarget[],
+  replaceTargets: boolean,
+): Promise<{ id: number } | null> {
+  return db
+    .prepare(
+      `INSERT INTO users (github_id, github_login, zk_opt_in, install_targets_json)
+       VALUES (?, ?, 1, ?)
+       ON CONFLICT(github_id) DO UPDATE SET
+         github_login=excluded.github_login,
+         zk_opt_in=1,
+         install_targets_json = CASE
+           WHEN ? THEN excluded.install_targets_json
+           ELSE users.install_targets_json
+         END,
+         updated_at=datetime('now')
+       RETURNING id`,
+    )
+    .bind(ghUser.id, ghUser.login, JSON.stringify(targets), replaceTargets ? 1 : 0)
+    .first<{ id: number }>();
+}
 
 export type LoginIntent = "signin" | "install" | "reauth" | "zk" | "prompt";
 
@@ -251,35 +317,22 @@ export async function callbackRoute(c: Context<{ Bindings: Env }>): Promise<Resp
     });
   }
 
+  // Shared: personal + orgs (defensive parse). Install-pending always writes
+  // targets (personal-only is fine if orgs flaked). Linked users only replace
+  // the cache when orgs were successfully fetched — never wipe on GitHub outage.
+  const { targets: installTargets, orgsFetched } = await fetchInstallTargets(
+    access_token,
+    ghUser,
+  );
+
   // No installations — mint install-pending session and show our install guide
   if (installations.length === 0) {
-    const orgsRes = await githubRestGet(
-      "https://api.github.com/user/orgs?per_page=100",
-      access_token,
+    const userRow = await upsertUserWithInstallTargets(
+      c.env.DB,
+      ghUser,
+      installTargets,
+      /* replaceTargets */ true,
     );
-    const orgs = orgsRes.ok ? ((await orgsRes.json()) as Array<{ id: number; login: string }>) : [];
-
-    const installTargets = [
-      { id: ghUser.id, login: ghUser.login, type: "User" as const },
-      ...orgs.map((o) => ({
-        id: o.id,
-        login: o.login,
-        type: "Organization" as const,
-      })),
-    ];
-
-    const userRow = await c.env.DB.prepare(
-      `INSERT INTO users (github_id, github_login, zk_opt_in, install_targets_json)
-       VALUES (?, ?, 1, ?)
-       ON CONFLICT(github_id) DO UPDATE SET
-         github_login=excluded.github_login,
-         zk_opt_in=1,
-         install_targets_json=excluded.install_targets_json,
-         updated_at=datetime('now')
-       RETURNING id`,
-    )
-      .bind(ghUser.id, ghUser.login, JSON.stringify(installTargets))
-      .first<{ id: number }>();
 
     if (!userRow) {
       return c.json({ error: "db_error" }, 500);
@@ -290,45 +343,13 @@ export async function callbackRoute(c: Context<{ Bindings: Env }>): Promise<Resp
     return completeOAuthSession(c, rawToken, redirectAfter, rememberSession);
   }
 
-  // Cache install targets (personal + orgs) even when the user already has
-  // installations — Settings needs them to offer "install on another account".
-  const orgsResLinked = await githubRestGet(
-    "https://api.github.com/user/orgs?per_page=100",
-    access_token,
+  // Upsert user — get internal id (keep prior install_targets_json if orgs fetch failed)
+  const userRow = await upsertUserWithInstallTargets(
+    c.env.DB,
+    ghUser,
+    installTargets,
+    orgsFetched,
   );
-  let orgsLinked: Array<{ id: number; login: string }> = [];
-  if (orgsResLinked.ok) {
-    try {
-      const body = (await orgsResLinked.json()) as unknown;
-      if (Array.isArray(body)) {
-        orgsLinked = body as Array<{ id: number; login: string }>;
-      }
-    } catch {
-      orgsLinked = [];
-    }
-  }
-  const installTargetsLinked = [
-    { id: ghUser.id, login: ghUser.login, type: "User" as const },
-    ...orgsLinked.map((o) => ({
-      id: o.id,
-      login: o.login,
-      type: "Organization" as const,
-    })),
-  ];
-
-  // Upsert user — get internal id
-  const userRow = await c.env.DB.prepare(
-    `INSERT INTO users (github_id, github_login, zk_opt_in, install_targets_json)
-     VALUES (?, ?, 1, ?)
-     ON CONFLICT(github_id) DO UPDATE SET
-       github_login=excluded.github_login,
-       zk_opt_in=1,
-       install_targets_json=excluded.install_targets_json,
-       updated_at=datetime('now')
-     RETURNING id`,
-  )
-    .bind(ghUser.id, ghUser.login, JSON.stringify(installTargetsLinked))
-    .first<{ id: number }>();
 
   if (!userRow) {
     return c.json({ error: "db_error" }, 500);

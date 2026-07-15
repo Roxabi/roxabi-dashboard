@@ -84,7 +84,7 @@ export async function buildMePayload(env: Env, session: SessionContext): Promise
     configure_url: githubConfigureUrl(r.installation_id, r.account_login, r.account_type),
   }));
   const installPending = session.tenantId == null || installations.length === 0;
-  const installTargets = installTargetsFromUserRow(installPending, userRow?.install_targets_json);
+  const installTargets = installTargetsFromUserRow(userRow?.install_targets_json);
   const onboardingStep = deriveOnboardingStep(session, installations, userRow?.consent_at ?? null);
 
   return {

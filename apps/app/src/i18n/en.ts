@@ -36,6 +36,7 @@ export const en: Translations = {
       hint: "Manage linked installations, or install the App on another account / organisation.",
       empty: "No linked installation yet.",
       configure: "Configure repositories",
+      configureAria: "Configure repositories for {login}",
       addHeading: "Add an installation",
       addHint:
         "Pick a personal account, a known organisation, or the GitHub picker for another org.",

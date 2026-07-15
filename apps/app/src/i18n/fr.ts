@@ -35,6 +35,7 @@ export const fr = {
       hint: "Gérez les installations liées, ou installez l'App sur un autre compte / organisation.",
       empty: "Aucune installation liée pour l'instant.",
       configure: "Configurer les dépôts",
+      configureAria: "Configurer les dépôts pour {login}",
       addHeading: "Ajouter une installation",
       addHint:
         "Choisissez un compte personnel, une organisation connue, ou le sélecteur GitHub pour une autre org.",

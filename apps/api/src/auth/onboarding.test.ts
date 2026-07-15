@@ -51,4 +51,24 @@ describe("buildInstallOptions", () => {
     expect(opts.map((o) => o.kind)).toEqual(["personal", "picker"]);
     expect(opts[0]?.login).toBe("alice");
   });
+
+  it("filters installed logins case-insensitively", () => {
+    const opts = buildInstallOptions(
+      [
+        { id: 1, login: "alice", type: "User" },
+        { id: 2, login: "Roxabi", type: "Organization" },
+      ],
+      undefined,
+      { installedLogins: ["roxabi"] },
+    );
+    expect(opts.map((o) => o.kind)).toEqual(["personal", "picker"]);
+  });
+
+  it("drops personalFallback when personal is already installed → picker only", () => {
+    const opts = buildInstallOptions([{ id: 1, login: "alice", type: "User" }], undefined, {
+      installedLogins: ["alice"],
+      personalFallback: { id: 1, login: "alice", type: "User" },
+    });
+    expect(opts.map((o) => o.kind)).toEqual(["picker"]);
+  });
 });

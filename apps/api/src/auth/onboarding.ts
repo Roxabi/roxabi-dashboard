@@ -84,9 +84,6 @@ export function deriveOnboardingStep(
 }
 
 /** Always surface cached install targets — Settings needs them after onboarding too. */
-export function installTargetsFromUserRow(
-  _installPending: boolean,
-  raw: string | null | undefined,
-): InstallTarget[] {
+export function installTargetsFromUserRow(raw: string | null | undefined): InstallTarget[] {
   return parseInstallTargets(raw);
 }
