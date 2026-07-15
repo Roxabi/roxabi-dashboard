@@ -13,12 +13,46 @@ export interface InstallOption {
   url: string;
 }
 
-export function buildInstallOptions(targets: InstallTarget[], appSlug?: string): InstallOption[] {
-  const personal = targets.find((t) => t.type === "User");
-  const orgs = targets.filter((t) => t.type === "Organization");
+export interface BuildInstallOptionsOpts {
+  /** Logins already linked (case-insensitive) — excluded from "add install" options. */
+  installedLogins?: Iterable<string>;
+  /** Ensure a personal option exists even when install_targets_json is empty/stale. */
+  personalFallback?: InstallTarget;
+}
+
+function normLogin(login: string): string {
+  return login.toLowerCase();
+}
+
+/**
+ * Build deep-links for installing the App on accounts the user can access.
+ * Always ends with a picker so orgs outside our cached target list remain reachable
+ * (Settings "add another org" and InstallGate both need this).
+ */
+export function buildInstallOptions(
+  targets: InstallTarget[],
+  appSlug?: string,
+  opts: BuildInstallOptionsOpts = {},
+): InstallOption[] {
+  const installed = new Set(
+    [...(opts.installedLogins ?? [])].map((l) => normLogin(l)).filter(Boolean),
+  );
+
+  const byKey = new Map<string, InstallTarget>();
+  for (const t of targets) {
+    byKey.set(`${t.type}:${normLogin(t.login)}`, t);
+  }
+  if (opts.personalFallback) {
+    const key = `User:${normLogin(opts.personalFallback.login)}`;
+    if (!byKey.has(key)) byKey.set(key, opts.personalFallback);
+  }
+
+  const merged = [...byKey.values()];
+  const personal = merged.find((t) => t.type === "User");
+  const orgs = merged.filter((t) => t.type === "Organization");
 
   const options: InstallOption[] = [];
-  if (personal) {
+  if (personal && !installed.has(normLogin(personal.login))) {
     options.push({
       kind: "personal",
       login: personal.login,
@@ -26,15 +60,15 @@ export function buildInstallOptions(targets: InstallTarget[], appSlug?: string):
     });
   }
   for (const org of orgs) {
+    if (installed.has(normLogin(org.login))) continue;
     options.push({
       kind: "org",
       login: org.login,
       url: githubInstallUrl(org, appSlug),
     });
   }
-  if (orgs.length === 0) {
-    options.push({ kind: "picker", url: githubInstallUrl(undefined, appSlug) });
-  }
+  // Always offer the GitHub account/org picker for installs we don't know about yet.
+  options.push({ kind: "picker", url: githubInstallUrl(undefined, appSlug) });
   return options;
 }
 
@@ -49,9 +83,10 @@ export function deriveOnboardingStep(
   return "ready";
 }
 
+/** Always surface cached install targets — Settings needs them after onboarding too. */
 export function installTargetsFromUserRow(
-  installPending: boolean,
+  _installPending: boolean,
   raw: string | null | undefined,
 ): InstallTarget[] {
-  return installPending ? parseInstallTargets(raw) : [];
+  return parseInstallTargets(raw);
 }

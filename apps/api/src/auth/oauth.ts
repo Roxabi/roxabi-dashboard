@@ -290,18 +290,44 @@ export async function callbackRoute(c: Context<{ Bindings: Env }>): Promise<Resp
     return completeOAuthSession(c, rawToken, redirectAfter, rememberSession);
   }
 
+  // Cache install targets (personal + orgs) even when the user already has
+  // installations — Settings needs them to offer "install on another account".
+  const orgsResLinked = await githubRestGet(
+    "https://api.github.com/user/orgs?per_page=100",
+    access_token,
+  );
+  let orgsLinked: Array<{ id: number; login: string }> = [];
+  if (orgsResLinked.ok) {
+    try {
+      const body = (await orgsResLinked.json()) as unknown;
+      if (Array.isArray(body)) {
+        orgsLinked = body as Array<{ id: number; login: string }>;
+      }
+    } catch {
+      orgsLinked = [];
+    }
+  }
+  const installTargetsLinked = [
+    { id: ghUser.id, login: ghUser.login, type: "User" as const },
+    ...orgsLinked.map((o) => ({
+      id: o.id,
+      login: o.login,
+      type: "Organization" as const,
+    })),
+  ];
+
   // Upsert user — get internal id
   const userRow = await c.env.DB.prepare(
     `INSERT INTO users (github_id, github_login, zk_opt_in, install_targets_json)
-     VALUES (?, ?, 1, NULL)
+     VALUES (?, ?, 1, ?)
      ON CONFLICT(github_id) DO UPDATE SET
        github_login=excluded.github_login,
        zk_opt_in=1,
-       install_targets_json=NULL,
+       install_targets_json=excluded.install_targets_json,
        updated_at=datetime('now')
      RETURNING id`,
   )
-    .bind(ghUser.id, ghUser.login)
+    .bind(ghUser.id, ghUser.login, JSON.stringify(installTargetsLinked))
     .first<{ id: number }>();
 
   if (!userRow) {

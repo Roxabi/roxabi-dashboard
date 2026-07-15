@@ -4,31 +4,48 @@
  * the reauth-gated delete (deferred from slice 7) are wired here in slice 10:
  * both privileged actions bounce through OAuth step-up via requestSettingsReauth
  * and resume on return (?settings=passphrase / ?settings=delete).
+ *
+ * Repositories: list linked installations with per-install "Configure" deep-links,
+ * plus install_options cards (personal / org / picker) to add another account —
+ * mirrors InstallGate so Settings is not a single link that lands on the only
+ * existing GitHub install.
  */
 
 import { clearDisplayName, getDisplayName, setDisplayName } from "@/auth/displayName";
 import { useLogout } from "@/auth/useAuthMutations";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { useT } from "@/i18n";
+import { type TFunc, useT } from "@/i18n";
 import { type ApiError, apiFetch } from "@/lib/api";
 import { PassphraseChangeSection } from "@/zk/PassphraseChangeSection";
 import { hasEnrolledThisSession } from "@/zk/enroll";
 import { clearZkReauthProof, getZkReauthProof } from "@/zk/github";
 import { clearLocalZkState } from "@/zk/reset";
 import { requestSettingsReauth } from "@/zk/settingsReauth";
-import type { MePayload } from "@roxabi-live/shared";
+import type { InstallOption, MePayload } from "@roxabi-live/shared";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
-function configureUrl(me: MePayload): string | null {
-  const opts = me.install_options ?? [];
-  return (
-    opts.find((o) => o.kind === "personal")?.url ??
-    opts.find((o) => o.kind === "picker")?.url ??
-    opts[0]?.url ??
-    null
-  );
+function optionCopy(opt: InstallOption, t: TFunc): { title: string; name: string; hint: string } {
+  if (opt.kind === "picker") {
+    return {
+      title: t("auth.install.option.orgTitle"),
+      name: t("auth.install.option.pickerName"),
+      hint: t("auth.install.option.pickerHint"),
+    };
+  }
+  if (opt.kind === "personal") {
+    return {
+      title: t("auth.install.option.personalTitle"),
+      name: opt.login ?? "",
+      hint: t("settings.repos.addPersonalHint"),
+    };
+  }
+  return {
+    title: t("auth.install.option.orgTitle"),
+    name: opt.login ?? "",
+    hint: t("settings.repos.addOrgHint"),
+  };
 }
 
 export function SettingsDialog({
@@ -55,8 +72,8 @@ export function SettingsDialog({
   const t = useT();
   const [name, setName] = useState(() => getDisplayName(login));
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const installUrl = configureUrl(me);
   const installations = me.installations ?? [];
+  const installOptions = me.install_options ?? [];
 
   const deleteAccount = useMutation<{ redirected: boolean }, ApiError, void>({
     mutationFn: async () => {
@@ -140,34 +157,68 @@ export function SettingsDialog({
           </p>
         </section>
 
-        <section className="space-y-2">
+        <section className="space-y-3">
           <h3 className="text-sm font-semibold text-foreground">{t("settings.repos.heading")}</h3>
-          <p className="text-xs text-muted-foreground">
-            {t("settings.repos.hint")}
-          </p>
+          <p className="text-xs text-muted-foreground">{t("settings.repos.hint")}</p>
+
           {installations.length ? (
-            <ul className="space-y-1 text-sm">
+            <ul className="space-y-2">
               {installations.map((i) => (
-                <li key={i.tenant_id} className="text-foreground">
-                  <strong>{i.account_login}</strong>{" "}
-                  <span className="text-muted-foreground">({i.account_type})</span>
+                <li
+                  key={i.tenant_id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                >
+                  <span className="text-foreground">
+                    <strong>{i.account_login}</strong>{" "}
+                    <span className="text-muted-foreground">({i.account_type})</span>
+                  </span>
+                  {i.configure_url ? (
+                    <a
+                      href={i.configure_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary underline-offset-4 hover:underline"
+                    >
+                      {t("settings.repos.configure")}
+                    </a>
+                  ) : null}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {t("settings.repos.empty")}
-            </p>
+            <p className="text-sm text-muted-foreground">{t("settings.repos.empty")}</p>
           )}
-          {installUrl && (
-            <a
-              href={installUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block text-sm text-primary underline-offset-4 hover:underline"
-            >
-              {t("settings.repos.configure")}
-            </a>
+
+          {installOptions.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t("settings.repos.addHeading")}
+              </h4>
+              <p className="text-xs text-muted-foreground">{t("settings.repos.addHint")}</p>
+              <div className="space-y-2">
+                {installOptions.map((opt) => {
+                  const c = optionCopy(opt, t);
+                  return (
+                    <a
+                      key={`${opt.kind}:${opt.login ?? "picker"}`}
+                      href={opt.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-md border border-border p-3 transition-colors hover:border-primary hover:bg-card/60"
+                      data-testid={`settings-install-${opt.kind}`}
+                    >
+                      <span className="block text-xs uppercase tracking-wide text-muted-foreground">
+                        {c.title}
+                      </span>
+                      {c.name ? (
+                        <span className="block font-medium text-foreground">{c.name}</span>
+                      ) : null}
+                      <span className="block text-xs text-muted-foreground">{c.hint}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </section>
 

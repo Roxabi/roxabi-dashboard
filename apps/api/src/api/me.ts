@@ -5,6 +5,7 @@
 
 import type { Context } from "hono";
 import { AUTH_NO_CACHE, clearSessionCookieHeaders, readSessionToken } from "../auth/cookies";
+import { githubConfigureUrl } from "../auth/github-install";
 import {
   buildInstallOptions,
   deriveOnboardingStep,
@@ -33,6 +34,8 @@ export interface MePayload {
     tenant_id: number;
     account_login: string;
     account_type: string;
+    /** GitHub deep-link to manage repos for this install (installation_id not raw-exported). */
+    configure_url: string;
   }>;
   onboarding_step: "install" | "consent" | "ready";
   consent_at: string | null;
@@ -57,15 +60,29 @@ export async function buildMePayload(env: Env, session: SessionContext): Promise
     .first<{ ok: number }>();
 
   const rows = await env.DB.prepare(
-    `SELECT ui.tenant_id AS tenant_id, t.account_login AS account_login, t.account_type AS account_type
+    `SELECT ui.tenant_id AS tenant_id,
+            t.installation_id AS installation_id,
+            t.account_login AS account_login,
+            t.account_type AS account_type
        FROM user_installations ui
        JOIN tenants t ON t.id = ui.tenant_id
        WHERE ui.user_id = ? AND t.deleted_at IS NULL AND t.suspended_at IS NULL`,
   )
     .bind(session.userId)
-    .all<{ tenant_id: number; account_login: string; account_type: string }>();
+    .all<{
+      tenant_id: number;
+      installation_id: number;
+      account_login: string;
+      account_type: string;
+    }>();
 
-  const installations = rows.results;
+  const installations = (rows.results ?? []).map((r) => ({
+    tenant_id: r.tenant_id,
+    account_login: r.account_login,
+    account_type: r.account_type,
+    // installation_id stays server-side; only the configure deep-link is exported.
+    configure_url: githubConfigureUrl(r.installation_id, r.account_login, r.account_type),
+  }));
   const installPending = session.tenantId == null || installations.length === 0;
   const installTargets = installTargetsFromUserRow(installPending, userRow?.install_targets_json);
   const onboardingStep = deriveOnboardingStep(session, installations, userRow?.consent_at ?? null);
@@ -81,7 +98,14 @@ export async function buildMePayload(env: Env, session: SessionContext): Promise
     active_tenant_id: session.tenantId,
     install_pending: installPending,
     install_targets: installTargets,
-    install_options: buildInstallOptions(installTargets, env.GITHUB_APP_SLUG),
+    install_options: buildInstallOptions(installTargets, env.GITHUB_APP_SLUG, {
+      installedLogins: installations.map((i) => i.account_login),
+      personalFallback: {
+        id: session.githubId,
+        login: session.githubLogin,
+        type: "User",
+      },
+    }),
     installations,
     onboarding_step: onboardingStep,
     consent_at: userRow?.consent_at ?? null,

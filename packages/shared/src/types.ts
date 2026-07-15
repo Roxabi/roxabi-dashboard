@@ -148,6 +148,8 @@ export interface Installation {
   tenant_id: number;
   account_login: string;
   account_type: string;
+  /** GitHub URL to manage repos / uninstall for this installation. */
+  configure_url?: string;
 }
 
 export type OnboardingStep = "install" | "consent" | "ready";

@@ -33,9 +33,14 @@ export const en: Translations = {
     },
     repos: {
       heading: "Repositories",
-      hint: "Add or remove repositories that the GitHub App can access.",
+      hint: "Manage linked installations, or install the App on another account / organisation.",
       empty: "No linked installation yet.",
-      configure: "Configure repositories on GitHub",
+      configure: "Configure repositories",
+      addHeading: "Add an installation",
+      addHint:
+        "Pick a personal account, a known organisation, or the GitHub picker for another org.",
+      addPersonalHint: "Install on your personal repositories (or update existing access)",
+      addOrgHint: "Install on this organisation — all repositories or a selection",
     },
     deleteAccount: {
       heading: "Delete account",

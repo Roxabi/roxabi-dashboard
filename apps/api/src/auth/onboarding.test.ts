@@ -23,11 +23,32 @@ describe("deriveOnboardingStep", () => {
 });
 
 describe("buildInstallOptions", () => {
-  it("builds personal, org, and picker options", () => {
+  it("builds personal, org, and always appends picker", () => {
     const opts = buildInstallOptions([
       { id: 1, login: "alice", type: "User" },
       { id: 2, login: "Roxabi", type: "Organization" },
     ]);
-    expect(opts.map((o) => o.kind)).toEqual(["personal", "org"]);
+    expect(opts.map((o) => o.kind)).toEqual(["personal", "org", "picker"]);
+  });
+
+  it("skips already-installed logins and still offers picker", () => {
+    const opts = buildInstallOptions(
+      [
+        { id: 1, login: "alice", type: "User" },
+        { id: 2, login: "Roxabi", type: "Organization" },
+      ],
+      undefined,
+      { installedLogins: ["Roxabi"] },
+    );
+    expect(opts.map((o) => o.kind)).toEqual(["personal", "picker"]);
+    expect(opts.find((o) => o.kind === "personal")?.login).toBe("alice");
+  });
+
+  it("uses personalFallback when targets are empty", () => {
+    const opts = buildInstallOptions([], undefined, {
+      personalFallback: { id: 42, login: "alice", type: "User" },
+    });
+    expect(opts.map((o) => o.kind)).toEqual(["personal", "picker"]);
+    expect(opts[0]?.login).toBe("alice");
   });
 });
