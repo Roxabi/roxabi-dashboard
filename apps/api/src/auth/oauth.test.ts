@@ -557,29 +557,20 @@ describe("callbackRoute", () => {
       accessToken: string,
       user: { id: number; login: string },
       installations: Array<{ id: number; account: { login: string; type: string } }>,
+      orgs: Array<{ id: number; login: string }> = [],
     ) {
-      let callCount = 0;
-      const mockFetch = vi.fn(async (_url: string, _init?: RequestInit) => {
-        callCount++;
-        if (callCount === 1) {
-          // Token exchange
-          return new Response(JSON.stringify({ access_token: accessToken }), {
+      const mockFetch = vi.fn(async (url: string, _init?: RequestInit) => {
+        const u = String(url);
+        const json = (body: unknown) =>
+          new Response(JSON.stringify(body), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           });
-        }
-        if (callCount === 2) {
-          // /user
-          return new Response(JSON.stringify(user), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        // /user/installations
-        return new Response(JSON.stringify({ installations }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+        if (u.includes("login/oauth/access_token")) return json({ access_token: accessToken });
+        if (u.includes("/user/installations")) return json({ installations });
+        if (u.includes("/user/orgs")) return json(orgs);
+        if (u.includes("api.github.com/user")) return json(user);
+        return json({});
       });
       vi.stubGlobal("fetch", mockFetch);
       return mockFetch;
@@ -700,6 +691,93 @@ describe("callbackRoute", () => {
       );
       expect(usersStmt).toBeDefined();
       expect(usersStmt?.sql).toContain("ON CONFLICT(github_id)");
+    });
+
+    it("persists install_targets_json (personal + orgs) when installations non-empty", async () => {
+      const stateValue = "b1".repeat(16);
+      const captured: FakeStmt[] = [];
+      const db = makeHappyPathDb(captured);
+
+      stubFetchSequence(
+        "t",
+        { id: 42, login: "alice" },
+        [{ id: 9, account: { login: "Roxabi", type: "Organization" } }],
+        [{ id: 77, login: "OtherOrg" }],
+      );
+
+      const { app, env } = makeApp(db);
+      await app.request(
+        `http://localhost/oauth/callback?code=mycode&state=${stateValue}`,
+        { method: "GET" },
+        env,
+      );
+
+      const usersStmt = captured.find(
+        (s) =>
+          s.sql.toLowerCase().includes("users") &&
+          s.sql.toLowerCase().includes("install_targets_json") &&
+          s.sql.toUpperCase().includes("ON CONFLICT"),
+      );
+      expect(usersStmt).toBeDefined();
+      // bind: github_id, login, targetsJson, replaceTargets(1 when orgs ok)
+      const targets = JSON.parse(String(usersStmt?.args[2])) as Array<{
+        login: string;
+        type: string;
+      }>;
+      expect(targets).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ login: "alice", type: "User" }),
+          expect.objectContaining({ login: "OtherOrg", type: "Organization" }),
+        ]),
+      );
+      expect(usersStmt?.args[3]).toBe(1);
+      expect(usersStmt?.sql).toMatch(/CASE\s+WHEN\s+\?\s+THEN\s+excluded\.install_targets_json/i);
+    });
+
+    it("does not replace install_targets_json when /user/orgs fails (linked path)", async () => {
+      const stateValue = "b2".repeat(16);
+      const captured: FakeStmt[] = [];
+      const db = makeHappyPathDb(captured);
+
+      // Custom fetch: orgs returns 500 so orgsFetched=false → replaceTargets=0
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          const json = (body: unknown, status = 200) =>
+            new Response(JSON.stringify(body), {
+              status,
+              headers: { "Content-Type": "application/json" },
+            });
+          if (u.includes("login/oauth/access_token")) return json({ access_token: "t" });
+          if (u.includes("/user/installations")) {
+            return json({
+              installations: [{ id: 9, account: { login: "Roxabi", type: "Organization" } }],
+            });
+          }
+          if (u.includes("/user/orgs")) return json({ message: "boom" }, 500);
+          if (u.includes("api.github.com/user")) return json({ id: 42, login: "alice" });
+          return json({});
+        }),
+      );
+
+      const { app, env } = makeApp(db);
+      const res = await app.request(
+        `http://localhost/oauth/callback?code=mycode&state=${stateValue}`,
+        { method: "GET" },
+        env,
+      );
+      expect(res.status).toBe(200);
+
+      const usersStmt = captured.find(
+        (s) =>
+          s.sql.toLowerCase().includes("users") &&
+          s.sql.toLowerCase().includes("install_targets_json") &&
+          s.sql.toUpperCase().includes("ON CONFLICT"),
+      );
+      expect(usersStmt).toBeDefined();
+      // replaceTargets flag is 0 → keep prior cache on conflict
+      expect(usersStmt?.args[3]).toBe(0);
     });
 
     it("issues tenants upsert with ON CONFLICT(installation_id)", async () => {
@@ -930,32 +1008,25 @@ describe("callbackRoute", () => {
       // #158: surface tenant RETURNING ids through batch results.
       applyBatchOverride(db);
 
-      // Stub fetch so both calls hit GitHub APIs successfully
-      let fetchCallCount = 0;
+      // Stub fetch so GitHub API calls succeed (URL-matched; includes /user/orgs)
       vi.stubGlobal(
         "fetch",
-        vi.fn(async (_url: string) => {
-          fetchCallCount++;
-          // Cycle through token → user → installations for each OAuth callback
-          const pos = ((fetchCallCount - 1) % 3) + 1;
-          if (pos === 1) {
-            return new Response(JSON.stringify({ access_token: "tok-abc" }), {
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          const json = (body: unknown) =>
+            new Response(JSON.stringify(body), {
               status: 200,
               headers: { "Content-Type": "application/json" },
             });
-          }
-          if (pos === 2) {
-            return new Response(JSON.stringify({ id: 42, login: "alice" }), {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            });
-          }
-          return new Response(
-            JSON.stringify({
+          if (u.includes("login/oauth/access_token")) return json({ access_token: "tok-abc" });
+          if (u.includes("/user/installations")) {
+            return json({
               installations: [{ id: 9, account: { login: "Roxabi", type: "Organization" } }],
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
+            });
+          }
+          if (u.includes("/user/orgs")) return json([]);
+          if (u.includes("api.github.com/user")) return json({ id: 42, login: "alice" });
+          return json({});
         }),
       );
 
@@ -1357,21 +1428,24 @@ describe("callbackRoute", () => {
     }
 
     function stubGithub(): void {
-      let n = 0;
       vi.stubGlobal(
         "fetch",
-        vi.fn(async () => {
-          n++;
+        vi.fn(async (url: string) => {
+          const u = String(url);
           const json = (b: unknown) =>
             new Response(JSON.stringify(b), {
               status: 200,
               headers: { "Content-Type": "application/json" },
             });
-          if (n === 1) return json({ access_token: "tok" });
-          if (n === 2) return json({ id: 42, login: "alice" });
-          return json({
-            installations: [{ id: 9, account: { login: "Roxabi", type: "Organization" } }],
-          });
+          if (u.includes("login/oauth/access_token")) return json({ access_token: "tok" });
+          if (u.includes("/user/installations")) {
+            return json({
+              installations: [{ id: 9, account: { login: "Roxabi", type: "Organization" } }],
+            });
+          }
+          if (u.includes("/user/orgs")) return json([]);
+          if (u.includes("api.github.com/user")) return json({ id: 42, login: "alice" });
+          return json({});
         }),
       );
     }

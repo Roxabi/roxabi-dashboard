@@ -32,9 +32,15 @@ export const fr = {
     },
     repos: {
       heading: "Dépôts",
-      hint: "Ajoutez ou retirez les dépôts auxquels l'App GitHub accède.",
+      hint: "Gérez les installations liées, ou installez l'App sur un autre compte / organisation.",
       empty: "Aucune installation liée pour l'instant.",
-      configure: "Configurer les dépôts sur GitHub",
+      configure: "Configurer les dépôts",
+      configureAria: "Configurer les dépôts pour {login}",
+      addHeading: "Ajouter une installation",
+      addHint:
+        "Choisissez un compte personnel, une organisation connue, ou le sélecteur GitHub pour une autre org.",
+      addPersonalHint: "Installer sur vos dépôts personnels (ou modifier l'accès existant)",
+      addOrgHint: "Installer sur cette organisation — tous les dépôts ou une sélection",
     },
     deleteAccount: {
       heading: "Supprimer le compte",

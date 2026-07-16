@@ -32,7 +32,8 @@ describe("tryLinkInstallPendingSession", () => {
 
     expect(tenantId).toBe(9);
     expect(captured.some((s) => s.sql.includes("UPDATE sessions SET tenant_id"))).toBe(true);
-    expect(captured.some((s) => s.sql.includes("install_targets_json = NULL"))).toBe(true);
+    // install_targets_json is kept for Settings "add another install"
+    expect(captured.some((s) => s.sql.includes("install_targets_json = NULL"))).toBe(false);
   });
 
   it("returns null when multiple installations exist", async () => {

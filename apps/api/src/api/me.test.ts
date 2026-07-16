@@ -165,7 +165,12 @@ describe("meRoute", () => {
 
   it("surfaces installation rows returned by D1 in the response body", async () => {
     // Arrange — FakeD1 returns one installation row
-    const fakeRow = { tenant_id: 9, account_login: "Roxabi", account_type: "Organization" };
+    const fakeRow = {
+      tenant_id: 9,
+      installation_id: 555,
+      account_login: "Roxabi",
+      account_type: "Organization",
+    };
     const { db } = captureDbWithRows([fakeRow]);
     const app = makeApp(db);
 
@@ -174,16 +179,27 @@ describe("meRoute", () => {
 
     // Assert
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { installations: (typeof fakeRow)[] };
+    const body = (await res.json()) as {
+      installations: Array<{
+        tenant_id: number;
+        account_login: string;
+        account_type: string;
+        configure_url: string;
+        installation_id?: number;
+      }>;
+    };
     expect(body.installations).toHaveLength(1);
     expect(body.installations[0]).toMatchObject({
       tenant_id: 9,
       account_login: "Roxabi",
       account_type: "Organization",
+      configure_url: "https://github.com/organizations/Roxabi/settings/installations/555",
     });
+    // installation_id is used server-side only (#171 — not raw-exported)
+    expect(body.installations[0]).not.toHaveProperty("installation_id");
   });
 
-  it("installations SELECT does NOT project installation_id (#171 — unnecessary exposure removed)", async () => {
+  it("installations SELECT projects installation_id for configure_url only", async () => {
     // Arrange
     const { db, stmts } = captureDb();
     const app = makeApp(db);
@@ -191,10 +207,10 @@ describe("meRoute", () => {
     // Act
     await app.request("/api/me", {}, makeEnv(db));
 
-    // Assert — installation_id is internal infra detail, not surfaced to clients
+    // Assert — needed to build configure_url; not returned raw on the wire
     const installStmt = stmts().find((s) => s.sql.includes("user_installations"));
     expect(installStmt).toBeDefined();
-    expect(installStmt?.sql).not.toContain("installation_id");
+    expect(installStmt?.sql).toContain("installation_id");
   });
 
   it("response includes active_tenant_id from the session (#148 SC7)", async () => {
@@ -240,23 +256,66 @@ describe("meRoute", () => {
     expect(body.install_targets.map((t) => t.login)).toEqual(["alice", "Roxabi"]);
   });
 
-  it("suppresses install_targets once a tenant is linked", async () => {
+  it("keeps install_targets once a tenant is linked (Settings add-install)", async () => {
+    const targetsJson = JSON.stringify([
+      { id: 42, login: "alice", type: "User" },
+      { id: 77, login: "OtherOrg", type: "Organization" },
+    ]);
     const { db } = captureDb((sql) => {
       if (sql.includes("install_targets_json")) {
-        return [{ zk_opt_in: 1, install_targets_json: "[]", consent_at: "2026-01-01T00:00:00Z" }];
+        return [{ zk_opt_in: 1, install_targets_json: targetsJson, consent_at: "2026-01-01T00:00:00Z" }];
       }
       if (sql.includes("user_installations")) {
-        return [{ tenant_id: 9, account_login: "Roxabi", account_type: "Organization" }];
+        return [
+          {
+            tenant_id: 9,
+            installation_id: 555,
+            account_login: "Roxabi",
+            account_type: "Organization",
+          },
+        ];
       }
       return [];
     });
     const res = await makeApp(db).request("/api/me", {}, makeEnv(db));
     const body = (await res.json()) as {
       install_pending: boolean;
-      install_targets: unknown[];
+      install_targets: Array<{ login: string }>;
+      install_options: Array<{ kind: string; login?: string }>;
+      installations: Array<{ configure_url: string }>;
     };
     expect(body.install_pending).toBe(false);
-    expect(body.install_targets).toEqual([]);
+    expect(body.install_targets.map((t) => t.login)).toEqual(["alice", "OtherOrg"]);
+    expect(body.installations[0]?.configure_url).toContain("/installations/555");
+    // Linked org excluded; personal + other org + picker remain
+    expect(body.install_options.map((o) => o.kind)).toEqual(["personal", "org", "picker"]);
+    expect(body.install_options.find((o) => o.kind === "org")?.login).toBe("OtherOrg");
+  });
+
+  it("always offers personal + picker install_options when ready with empty targets", async () => {
+    const { db } = captureDb((sql) => {
+      if (sql.includes("install_targets_json")) {
+        return [{ zk_opt_in: 1, install_targets_json: null, consent_at: "2026-01-01T00:00:00Z" }];
+      }
+      if (sql.includes("user_installations")) {
+        return [
+          {
+            tenant_id: 9,
+            installation_id: 555,
+            account_login: "Roxabi",
+            account_type: "Organization",
+          },
+        ];
+      }
+      return [];
+    });
+    const res = await makeApp(db).request("/api/me", {}, makeEnv(db));
+    const body = (await res.json()) as {
+      install_options: Array<{ kind: string; login?: string; url: string }>;
+    };
+    expect(body.install_options.map((o) => o.kind)).toEqual(["personal", "picker"]);
+    expect(body.install_options[0]?.login).toBe("alice");
+    expect(body.install_options[0]?.url).toContain("target_id=42");
   });
 
   it("installations SELECT filters soft-deleted tenants", async () => {

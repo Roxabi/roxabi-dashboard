@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_GITHUB_APP_SLUG,
+  githubConfigureUrl,
   githubInstallUrl,
   parseInstallTargets,
   resolveGithubAppSlug,
@@ -40,6 +41,26 @@ describe("githubInstallUrl", () => {
     const url = new URL(githubInstallUrl({ id: 99, login: "Roxabi", type: "Organization" }));
     expect(url.searchParams.get("target_id")).toBe("99");
     expect(url.searchParams.get("target_type")).toBe("Organization");
+  });
+});
+
+describe("githubConfigureUrl", () => {
+  it("uses user settings path for personal installs", () => {
+    expect(githubConfigureUrl(99, "alice", "User")).toBe(
+      "https://github.com/settings/installations/99",
+    );
+  });
+
+  it("uses org settings path for organisation installs", () => {
+    expect(githubConfigureUrl(55, "Roxabi", "Organization")).toBe(
+      "https://github.com/organizations/Roxabi/settings/installations/55",
+    );
+  });
+
+  it("encodes reserved characters in organisation login path segment", () => {
+    expect(githubConfigureUrl(7, "acme/corp", "Organization")).toBe(
+      "https://github.com/organizations/acme%2Fcorp/settings/installations/7",
+    );
   });
 });
 
