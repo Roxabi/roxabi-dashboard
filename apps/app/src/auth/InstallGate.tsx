@@ -7,40 +7,16 @@
  */
 
 import { OnboardingSteps } from "@/auth/OnboardingSteps";
+import { installOptionCopy } from "@/auth/installOptionCopy";
 import { installRefresh, useLogout } from "@/auth/useAuthMutations";
 import { ME_QUERY_KEY } from "@/auth/useMe";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/i18n";
-import type { InstallOption, MePayload } from "@roxabi-live/shared";
+import type { MePayload } from "@roxabi-live/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const DEFAULT_FALLBACK = "/login?intent=install&redirect=%2F";
-
-function optionCopy(
-  opt: InstallOption,
-  t: (key: string) => string,
-): { title: string; name: string; hint: string } {
-  if (opt.kind === "picker") {
-    return {
-      title: t("auth.install.option.orgTitle"),
-      name: t("auth.install.option.pickerName"),
-      hint: t("auth.install.option.pickerHint"),
-    };
-  }
-  if (opt.kind === "personal") {
-    return {
-      title: t("auth.install.option.personalTitle"),
-      name: opt.login ?? "",
-      hint: t("auth.install.option.personalHint"),
-    };
-  }
-  return {
-    title: t("auth.install.option.orgTitle"),
-    name: opt.login ?? "",
-    hint: t("auth.install.option.orgHint"),
-  };
-}
 
 export function InstallGate({ me }: { me: MePayload }) {
   const t = useT();
@@ -112,7 +88,10 @@ export function InstallGate({ me }: { me: MePayload }) {
 
         <div className="space-y-2">
           {options.map((opt) => {
-            const c = optionCopy(opt, t);
+            const c = installOptionCopy(opt, t, {
+              personal: t("auth.install.option.personalHint"),
+              org: t("auth.install.option.orgHint"),
+            });
             return (
               <a
                 key={`${opt.kind}:${opt.login ?? "picker"}`}

@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.24.1](https://github.com/Roxabi/roxabi-live/compare/roxabi-live/v0.24.0...roxabi-live/v0.24.1) (2026-07-16)
+
+
+### Fixed
+
+* **auth:** multi-account install/configure options in Settings ([#313](https://github.com/Roxabi/roxabi-live/pull/313))
+  - Per-install `configure_url` deep-links (GitHub settings for each linked account)
+  - Always expose `install_options` (personal / known orgs / picker) after onboarding
+  - Keep and refresh `install_targets_json` across OAuth; non-destructive update when `/user/orgs` fails
+  - Shared `fetchInstallTargets` / `upsertUserWithInstallTargets`; Settings + legacy shell multi-install UX
+  - a11y labels, ME invalidate on Settings open/focus, shared `installOptionCopy`
+
+
 ## [0.24.0](https://github.com/Roxabi/roxabi-live/compare/roxabi-live/v0.23.0...roxabi-live/v0.24.0) (2026-07-05)
 
 
