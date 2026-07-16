@@ -34,6 +34,22 @@ export function githubInstallUrl(target?: InstallTarget, appSlug?: string): stri
   return url.toString();
 }
 
+/**
+ * Deep-link to GitHub's installation settings (repo selection / suspend / uninstall).
+ * User installs live under /settings/installations; org installs under
+ * /organizations/{login}/settings/installations.
+ */
+export function githubConfigureUrl(
+  installationId: number,
+  accountLogin: string,
+  accountType: InstallTargetType | string,
+): string {
+  if (accountType === "Organization") {
+    return `https://github.com/organizations/${encodeURIComponent(accountLogin)}/settings/installations/${installationId}`;
+  }
+  return `https://github.com/settings/installations/${installationId}`;
+}
+
 /** Parse install_targets_json from users — invalid JSON yields []. */
 export function parseInstallTargets(raw: string | null | undefined): InstallTarget[] {
   if (!raw) return [];

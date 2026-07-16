@@ -44,18 +44,36 @@ export const fixtureMe: Record<"install" | "consent" | "ready" | "multiTenant", 
     ...base(),
     active_tenant_id: 1,
     install_pending: false,
-    installations: [{ tenant_id: 1, account_login: "roxabi", account_type: "Organization" }],
+    installations: [
+      {
+        tenant_id: 1,
+        account_login: "roxabi",
+        account_type: "Organization",
+        configure_url: "https://github.com/organizations/roxabi/settings/installations/1001",
+      },
+    ],
     onboarding_step: "consent",
   },
   ready: {
     ...base(),
     active_tenant_id: 1,
     install_pending: false,
-    installations: [{ tenant_id: 1, account_login: "roxabi", account_type: "Organization" }],
+    installations: [
+      {
+        tenant_id: 1,
+        account_login: "roxabi",
+        account_type: "Organization",
+        configure_url: "https://github.com/organizations/roxabi/settings/installations/1001",
+      },
+    ],
     install_options: [
       {
-        kind: "org",
-        login: "roxabi",
+        kind: "personal",
+        login: "octofleet",
+        url: "https://github.com/apps/roxabi-live/installations/new?target_id=4242&target_type=User",
+      },
+      {
+        kind: "picker",
         url: "https://github.com/apps/roxabi-live/installations/new",
       },
     ],
@@ -67,8 +85,24 @@ export const fixtureMe: Record<"install" | "consent" | "ready" | "multiTenant", 
     active_tenant_id: 1,
     install_pending: false,
     installations: [
-      { tenant_id: 1, account_login: "roxabi", account_type: "Organization" },
-      { tenant_id: 2, account_login: "octofleet", account_type: "User" },
+      {
+        tenant_id: 1,
+        account_login: "roxabi",
+        account_type: "Organization",
+        configure_url: "https://github.com/organizations/roxabi/settings/installations/1001",
+      },
+      {
+        tenant_id: 2,
+        account_login: "octofleet",
+        account_type: "User",
+        configure_url: "https://github.com/settings/installations/1002",
+      },
+    ],
+    install_options: [
+      {
+        kind: "picker",
+        url: "https://github.com/apps/roxabi-live/installations/new",
+      },
     ],
     onboarding_step: "ready",
     consent_at: "2026-06-25T10:00:00Z",
